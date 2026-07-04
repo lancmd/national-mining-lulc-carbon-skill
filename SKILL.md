@@ -126,6 +126,17 @@ description: 全国矿区土地利用分类、沉陷积水识别、PLUS模型预
 
 读取 `arcgis_steps/plus_driver_preprocessing.md`，以基期土地利用图为 master grid，统一所有驱动因子的 CRS、像元、范围、行列数、Snap 和 NoData；只有 DEM 时，用 Surface Parameters 派生坡度和坡向，用 Distance Accumulation 生成道路、铁路、河流、城镇和矿区距离栅格。
 
+随后按以下顺序读取 PLUS 模块：
+
+- `plus_model/plus_workflow.md`：总体流程、LEAS/CARS、土地需求和结果验收；
+- `plus_model/driver_factors.md`：驱动因子选择、时间匹配和共线性检查；
+- `plus_model/calibration_validation.md`：历史回代、FoM/Kappa 和多随机种子；
+- `plus_model/scenario_setting.md`：ND、UD、EP、RE 四情景；
+- `plus_model/conversion_rules.md`：转换矩阵语义和可达性；
+- `plus_model/pim_subsidence_driver.md`：资源开采情景的 PIM 耦合。
+
+未来预测前必须完成已知年份回代。Kappa 不能单独作为通过依据，应同时报告 FoM、关键地类精度和多随机种子稳定性。论文或附件中的百分比只能作为案例参数或敏感性分析起点，不得作为全国矿区固定默认值。PIM 下沉深度不等于沉陷积水；没有地下水、地形闭合和排水等证据时，只能解释为沉陷影响潜势。
+
 ### Step 6：碳储量计算
 
 基于 InVEST 模型计算地上碳、地下碳、土壤碳和死有机质碳。若研究对象为沉陷积水矿区，应额外考虑水体碳、水生植物碳和底泥碳，构建沉陷积水复合碳库。

@@ -1,0 +1,11 @@
+scenario,from_class,to_class,control_layer,value_type,value,unit,evidence,status,notes
+ND,all,all,land_demand,historical_trend,,,historical_backcast,pending,calibrate before forecast
+UD,cropland,built_up,land_demand,relative_change,,,local_plan,pending,do not treat as direct transition probability
+UD,grassland,built_up,conversion_matrix,allow_or_restrict,,,local_plan,pending,confirm current PLUS matrix semantics
+EP,forest,built_up,conversion_matrix,allow_or_restrict,,,ecological_redline,pending,protect statutory ecological space
+EP,bare_mining_land,forest,spatial_constraint,project_mask,,,restoration_plan,pending,only within feasible restoration projects
+EP,bare_mining_land,grassland,spatial_constraint,project_mask,,,restoration_plan,pending,check soil and engineering feasibility
+RE,cropland,subsidence_water,driver,continuous_suitability,,,PIM_groundwater_history,pending,subsidence depth is not water
+RE,forest,subsidence_water,driver,continuous_suitability,,,PIM_groundwater_history,pending,validate with historical water conversion
+RE,grassland,subsidence_water,driver,continuous_suitability,,,PIM_groundwater_history,pending,validate with historical water conversion
+RE,all,built_up,land_demand,relative_change,,,mining_plan,pending,link to approved mining infrastructure demand
