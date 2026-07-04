@@ -139,7 +139,14 @@ description: 全国矿区土地利用分类、沉陷积水识别、PLUS模型预
 
 ### Step 6：碳储量计算
 
-基于 InVEST 模型计算地上碳、地下碳、土壤碳和死有机质碳。若研究对象为沉陷积水矿区，应额外考虑水体碳、水生植物碳和底泥碳，构建沉陷积水复合碳库。
+基于用户提供的碳密度表，使用 InVEST Carbon Storage and Sequestration 计算地上碳、地下碳、土壤碳和死亡有机质碳。按顺序读取：
+
+- `invest_carbon/invest_workflow.md`：输入、运行方式、版本差异和输出；
+- `invest_carbon/carbon_density_rules.md`：碳密度单位、来源、土层深度和案例参数边界；
+- `invest_carbon/result_validation.md`：手工闭合、单位检查和敏感性分析；
+- `invest_carbon/subsidence_water_carbon.md`：有库容、植被和底泥数据时的沉陷积水增强核算。
+
+碳密度必须由用户提供，不自动套用论文案例。若 `c_dead` 缺失并设为 0，必须记录为模型假设。沉陷积水复合碳库采用替换法：先从 InVEST 总量扣除沉陷积水的面积法基准碳量，再加入水体体积碳、水生植被碳和底泥碳，禁止重复计量。
 
 ### Step 7：生态服务价值评价
 

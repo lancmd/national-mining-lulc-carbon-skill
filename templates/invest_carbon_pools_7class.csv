@@ -1,0 +1,8 @@
+lucode,LULC_Name,c_above,c_below,c_soil,c_dead
+1,subsidence_water,,,,
+2,natural_water,,,,
+3,built_up,,,,
+4,cropland,,,,
+5,forest,,,,
+6,grassland,,,,
+7,bare_mining_land,,,,
