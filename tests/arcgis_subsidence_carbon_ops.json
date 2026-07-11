@@ -1,0 +1,46 @@
+{
+  "environment": {
+    "overwriteOutput": true,
+    "snapRaster": "dem.tif",
+    "cellSize": "dem.tif",
+    "extent": "dem.tif"
+  },
+  "operations": [
+    {
+      "id": "subsidence_water_carbon",
+      "type": "subsidence_water_carbon",
+      "dem": "dem.tif",
+      "subsidence_depth": "subsidence_depth.tif",
+      "water_boundary": "water_boundary.gdb/water_boundary",
+      "water_level_elevation_m": 99,
+      "water_depth_output": "water_depth_composite.tif",
+      "aquatic_vegetation_output": "aquatic_vegetation.tif",
+      "bottom_sediment_output": "bottom_sediment.tif",
+      "volume_table": "validation/water_volume_composite.csv",
+      "carbon_table": "validation/water_carbon.csv",
+      "water_carbon_density_g_c_m3": 1000,
+      "aquatic_vegetation_carbon_density_t_c_ha": 10,
+      "bottom_sediment_carbon_density_t_c_ha": 100,
+      "aquatic_vegetation_depth_threshold_m": 1.2,
+      "bottom_sediment_assume_full_waterbed": true
+    },
+    {
+      "id": "subsidence_water_carbon_no_vegetation",
+      "type": "subsidence_water_carbon",
+      "dem": "dem.tif",
+      "subsidence_depth": "subsidence_depth.tif",
+      "water_boundary": "water_boundary.gdb/water_boundary",
+      "water_level_elevation_m": 99,
+      "water_depth_output": "water_depth_no_vegetation.tif",
+      "aquatic_vegetation_output": "aquatic_vegetation_none.tif",
+      "bottom_sediment_output": "bottom_sediment_no_vegetation.tif",
+      "volume_table": "validation/water_volume_no_vegetation.csv",
+      "carbon_table": "validation/water_carbon_no_vegetation.csv",
+      "water_carbon_density_g_c_m3": 1000,
+      "aquatic_vegetation_carbon_density_t_c_ha": 10,
+      "bottom_sediment_carbon_density_t_c_ha": 100,
+      "aquatic_vegetation_depth_threshold_m": 0.5,
+      "bottom_sediment_assume_full_waterbed": true
+    }
+  ]
+}

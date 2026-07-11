@@ -40,6 +40,6 @@ python scripts/project_validator.py --project <project.json>
 - `gee_codes/`、`envi_classification/`、`arcgis_steps/`、`plus_model/`、`invest_carbon/`：领域流程与参数依据。
 - `open_gis_workflows/`：开放 GIS 数据与验证规范。
 
-常用本地模板：`templates/local_project.json`、`templates/arcgis_module_outputs.json`、`templates/ecosystem_service_config.json`。沉陷积水库容必须使用基准 DEM、正下沉深度栅格和水面高程；`w.dat` 先标准化为下沉深度，不能直接当水深。
+常用本地模板：`templates/local_project.json`、`templates/arcgis_module_outputs.json`、`templates/ecosystem_service_config.json`。沉陷积水库容必须使用基准 DEM、正下沉深度栅格、遥感积水边界和水面高程；`w.dat` 先标准化为下沉深度，不能直接当水深。启用 `thesis_4_3_composite` 后，ArcGIS 会输出库容、水体碳、水生植被碳和底泥碳，并以复合碳库替换 InVEST 的沉陷积水面积碳。
 
 源数据默认只读，派生文件写入任务自己的 `workspace`。

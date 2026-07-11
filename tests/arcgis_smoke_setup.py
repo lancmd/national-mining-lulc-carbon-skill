@@ -18,4 +18,16 @@ arcpy.management.DefineProjection(str(workspace / "lulc.tif"), spatial_reference
 subsidence = arcpy.sa.CreateConstantRaster(2, "FLOAT", 30, arcpy.Extent(500000, 3700000, 500300, 3700300))
 subsidence.save(str(workspace / "subsidence_depth.tif"))
 arcpy.management.DefineProjection(str(workspace / "subsidence_depth.tif"), spatial_reference)
+boundary_gdb = workspace / "water_boundary.gdb"
+boundary = str(boundary_gdb / "water_boundary")
+if not arcpy.Exists(boundary):
+    if not arcpy.Exists(str(boundary_gdb)):
+        arcpy.management.CreateFileGDB(str(workspace), boundary_gdb.name)
+    arcpy.management.CreateFeatureclass(str(boundary_gdb), "water_boundary", "POLYGON", spatial_reference=spatial_reference)
+    ring = arcpy.Array([
+        arcpy.Point(500000, 3700000), arcpy.Point(500300, 3700000),
+        arcpy.Point(500300, 3700300), arcpy.Point(500000, 3700300), arcpy.Point(500000, 3700000),
+    ])
+    with arcpy.da.InsertCursor(boundary, ["SHAPE@"]) as rows:
+        rows.insertRow([arcpy.Polygon(ring, spatial_reference)])
 print(workspace)

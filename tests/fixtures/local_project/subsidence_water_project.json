@@ -1,0 +1,47 @@
+{
+  "schema_version": 2,
+  "project_id": "subsidence-water-4-3-smoke",
+  "workspace": "../../../outputs/subsidence_water_contract_smoke",
+  "inputs": {
+    "imagery": ["imagery.tif"],
+    "roi": "roi.gpkg",
+    "mine_boundary": "mine_boundary.gpkg",
+    "carbon_density": "carbon_density.csv",
+    "lulc_baseline": "imagery.tif",
+    "training_roi": null,
+    "model_package": null,
+    "dem": "driver_dem.tif",
+    "water_surface_elevation_m": 0,
+    "subsidence_depth_raster": "subsidence_depth_aligned.tif",
+    "subsidence_w_dat": "external_w.dat",
+    "workface_boundary": null,
+    "subsidence_water_boundary": "roi.gpkg",
+    "aquatic_vegetation_boundary": "mine_boundary.gpkg",
+    "bottom_sediment_boundary": "mine_boundary.gpkg",
+    "driver_factors": {}
+  },
+  "classification": {"enabled": false, "engine": "provided_lulc", "scheme": "high_water_coal_7class"},
+  "plus": {"enabled": false},
+  "invest": {"enabled": false},
+  "subsidence_water": {
+    "enabled": true,
+    "mode": "thesis_4_3_composite",
+    "water_level_elevation_m": 0,
+    "output_depth_raster": "outputs/subsidence_water_depth.tif",
+    "output_volume_table": "outputs/subsidence_water_volume.csv",
+    "output_aquatic_vegetation_raster": "outputs/subsidence_aquatic_vegetation.tif",
+    "output_bottom_sediment_raster": "outputs/subsidence_bottom_sediment.tif",
+    "output_carbon_table": "outputs/subsidence_water_carbon.csv",
+    "thesis_4_3": {
+      "water_carbon_density_g_c_m3": 26.25,
+      "aquatic_vegetation_carbon_density_t_c_ha": 0.46,
+      "bottom_sediment_carbon_density_t_c_ha": 62.42,
+      "aquatic_vegetation_depth_threshold_m": null,
+      "bottom_sediment_assume_full_waterbed": false,
+      "invest_total_carbon_t_c": null,
+      "invest_subsidence_water_carbon_t_c": null
+    }
+  },
+  "ecosystem_service": {"enabled": false},
+  "gis_outputs": {"enabled": false}
+}

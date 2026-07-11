@@ -14,6 +14,7 @@ REQUIRED_CARBON_COLUMNS = {"lucode", "c_above", "c_below", "c_soil", "c_dead"}
 VALID_ENGINES = {"envi", "pytorch", "provided_lulc"}
 VALID_ECOSYSTEM_METHODS = {"minmax", "ahp"}
 VALID_PLUS_SCENARIOS = {"ND", "UD", "EP", "RE"}
+VALID_SUBSIDENCE_WATER_MODES = {"classify_only", "estimate_volume", "thesis_4_3_composite"}
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -149,7 +150,11 @@ def validate(project_path: Path) -> dict[str, Any]:
                 required_path("workface_boundary", inputs.get("workface_boundary"), base, errors)
 
     subsidence = project.get("subsidence_water", {})
-    if subsidence.get("enabled") and subsidence.get("mode") == "estimate_volume":
+    if subsidence.get("enabled"):
+        mode = subsidence.get("mode")
+        if mode not in VALID_SUBSIDENCE_WATER_MODES:
+            errors.append(f"subsidence_water.mode must be one of {sorted(VALID_SUBSIDENCE_WATER_MODES)}")
+    if subsidence.get("enabled") and subsidence.get("mode") in {"estimate_volume", "thesis_4_3_composite"}:
         required_path("dem", inputs.get("dem"), base, errors)
         if not inputs.get("subsidence_depth_raster") and not inputs.get("subsidence_w_dat"):
             errors.append("subsidence volume requires subsidence_depth_raster or subsidence_w_dat")
@@ -157,10 +162,56 @@ def validate(project_path: Path) -> dict[str, Any]:
             required_path("subsidence_depth_raster", inputs.get("subsidence_depth_raster"), base, errors)
         if inputs.get("subsidence_w_dat"):
             required_path("subsidence_w_dat", inputs.get("subsidence_w_dat"), base, errors)
-        level = subsidence.get("water_level_elevation_m") or inputs.get("water_surface_elevation_m")
+        level = subsidence.get("water_level_elevation_m")
+        if level is None:
+            level = inputs.get("water_surface_elevation_m")
         if not isinstance(level, (int, float)):
             errors.append("subsidence volume requires water_level_elevation_m")
         warnings.append("W data describes ground subsidence, not water depth; calculate water depth from DEM and water level.")
+
+    if subsidence.get("enabled") and subsidence.get("mode") == "thesis_4_3_composite":
+        # Thesis 4.3 requires the observed water boundary to be matched to the PIM-derived terrain.
+        required_path("subsidence_depth_raster", inputs.get("subsidence_depth_raster"), base, errors)
+        required_path("subsidence_water_boundary", inputs.get("subsidence_water_boundary"), base, errors)
+        if inputs.get("aquatic_vegetation_boundary"):
+            required_path("aquatic_vegetation_boundary", inputs.get("aquatic_vegetation_boundary"), base, errors)
+        if inputs.get("bottom_sediment_boundary"):
+            required_path("bottom_sediment_boundary", inputs.get("bottom_sediment_boundary"), base, errors)
+        thesis = subsidence.get("thesis_4_3", {})
+        for field in (
+            "water_carbon_density_g_c_m3", "aquatic_vegetation_carbon_density_t_c_ha",
+            "bottom_sediment_carbon_density_t_c_ha",
+        ):
+            value = thesis.get(field)
+            if not isinstance(value, (int, float)) or value < 0:
+                errors.append(f"subsidence_water.thesis_4_3.{field} must be a non-negative number")
+        if not inputs.get("aquatic_vegetation_boundary"):
+            threshold = thesis.get("aquatic_vegetation_depth_threshold_m")
+            if not isinstance(threshold, (int, float)) or threshold < 0:
+                errors.append(
+                    "provide aquatic_vegetation_boundary or a non-negative "
+                    "subsidence_water.thesis_4_3.aquatic_vegetation_depth_threshold_m"
+                )
+            else:
+                warnings.append("Aquatic vegetation area from a depth threshold is potential cover and needs field/imagery validation.")
+        if not inputs.get("bottom_sediment_boundary") and thesis.get("bottom_sediment_assume_full_waterbed") is not True:
+            errors.append("provide bottom_sediment_boundary or explicitly set bottom_sediment_assume_full_waterbed to true")
+        for field in (
+            "output_depth_raster", "output_volume_table", "output_aquatic_vegetation_raster",
+            "output_bottom_sediment_raster", "output_carbon_table",
+        ):
+            if not subsidence.get(field):
+                errors.append(f"subsidence_water.{field} is required for thesis_4_3_composite")
+        invest_total = thesis.get("invest_total_carbon_t_c")
+        invest_water = thesis.get("invest_subsidence_water_carbon_t_c")
+        if (invest_total is None) != (invest_water is None):
+            errors.append(
+                "thesis_4_3 invest_total_carbon_t_c and invest_subsidence_water_carbon_t_c must be supplied together"
+            )
+        for field in ("invest_total_carbon_t_c", "invest_subsidence_water_carbon_t_c"):
+            value = thesis.get(field)
+            if value is not None and (not isinstance(value, (int, float)) or value < 0):
+                errors.append(f"subsidence_water.thesis_4_3.{field} must be a non-negative number when supplied")
 
     ecosystem = project.get("ecosystem_service", {})
     if ecosystem.get("enabled"):

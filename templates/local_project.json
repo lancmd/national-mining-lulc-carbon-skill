@@ -15,6 +15,9 @@
     "subsidence_depth_raster": null,
     "subsidence_w_dat": null,
     "workface_boundary": null,
+    "subsidence_water_boundary": null,
+    "aquatic_vegetation_boundary": null,
+    "bottom_sediment_boundary": null,
     "driver_factors": {
       "dem": null,
       "slope": null,
@@ -70,7 +73,19 @@
     "workface_boundary": null,
     "water_level_elevation_m": null,
     "output_depth_raster": "outputs/subsidence_water_depth.tif",
-    "output_volume_table": "outputs/subsidence_water_volume.csv"
+    "output_volume_table": "outputs/subsidence_water_volume.csv",
+    "output_aquatic_vegetation_raster": "outputs/subsidence_aquatic_vegetation.tif",
+    "output_bottom_sediment_raster": "outputs/subsidence_bottom_sediment.tif",
+    "output_carbon_table": "outputs/subsidence_water_carbon.csv",
+    "thesis_4_3": {
+      "water_carbon_density_g_c_m3": null,
+      "aquatic_vegetation_carbon_density_t_c_ha": null,
+      "bottom_sediment_carbon_density_t_c_ha": null,
+      "aquatic_vegetation_depth_threshold_m": null,
+      "bottom_sediment_assume_full_waterbed": false,
+      "invest_total_carbon_t_c": null,
+      "invest_subsidence_water_carbon_t_c": null
+    }
   },
   "ecosystem_service": {
     "enabled": false,

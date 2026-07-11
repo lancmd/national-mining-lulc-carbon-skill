@@ -136,7 +136,25 @@ PLUS 使用数值一致、可追溯的分析栅格，不直接使用渲染后的
 - 输出 `subsidence_depth_aligned.tif`；
 - 检查 CRS、像元大小、行列数、范围和像元原点。
 
-## 12. 推荐输出
+## 12. 接入论文第 4.3 节沉陷积水碳储核算
+
+当用户提供同一时期的遥感沉陷积水边界、水面高程和三个碳密度后，使用 `templates/arcgis_module_outputs.json` 中的 `subsidence_water_carbon` 操作。该操作的执行顺序为：
+
+```text
+遥感积水边界 + 预采 DEM + DEPTH_M
+→ 沉陷后地形与正水深栅格
+→ 库容（Σ 水深 × 像元面积）
+→ 水体碳 + 水生植被碳 + 底泥碳
+→ 沉陷积水复合碳库
+```
+
+- `water_boundary` 必须是遥感解译/人工核验的沉陷积水边界，不能以整个矿界或工作面边界替代；
+- `water_level_elevation_m` 与 DEM 必须采用同一垂直基准；
+- 论文案例按水深阈值推定水生植被面积；本项目要求用户提供本地阈值，或提供实测/解译的 `aquatic_vegetation_mask`；
+- 底泥范围优先使用 `bottom_sediment_mask`；如确实假定全水底覆盖，需显式设置 `bottom_sediment_assume_full_waterbed=true`；
+- 输出包括水深、水生植被、底泥覆盖栅格，库容 CSV 和三组分碳储 CSV。若同时填写 InVEST 总碳与其沉陷积水面积碳，CSV 会输出替换后的增强总碳，而不是相加后的重复总碳。
+
+## 13. 推荐输出
 
 - 原始 `w.dat` / `w.txt` 只读副本；
 - 标准化沉陷点要素；

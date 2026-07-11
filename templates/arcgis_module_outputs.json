@@ -7,14 +7,26 @@
   },
   "operations": [
     {
-      "id": "subsidence_water_volume",
-      "type": "subsidence_water_volume",
+      "id": "subsidence_water_carbon",
+      "type": "subsidence_water_carbon",
       "dem": "replace_with_pre_mining_dem.tif",
       "subsidence_depth": "replace_with_positive_subsidence_depth.tif",
+      "water_boundary": "replace_with_remote_sensing_subsidence_water_boundary.gpkg",
       "water_level_elevation_m": 0.0,
-      "mask": "replace_with_mine_or_workface_boundary.shp",
       "water_depth_output": "outputs/subsidence_water_depth.tif",
-      "volume_table": "outputs/subsidence_water_volume.csv"
+      "aquatic_vegetation_output": "outputs/subsidence_aquatic_vegetation.tif",
+      "bottom_sediment_output": "outputs/subsidence_bottom_sediment.tif",
+      "volume_table": "outputs/subsidence_water_volume.csv",
+      "carbon_table": "outputs/subsidence_water_carbon.csv",
+      "water_carbon_density_g_c_m3": null,
+      "aquatic_vegetation_carbon_density_t_c_ha": null,
+      "bottom_sediment_carbon_density_t_c_ha": null,
+      "aquatic_vegetation_mask": null,
+      "aquatic_vegetation_depth_threshold_m": null,
+      "bottom_sediment_mask": null,
+      "bottom_sediment_assume_full_waterbed": false,
+      "invest_total_carbon_t_c": null,
+      "invest_subsidence_water_carbon_t_c": null
     },
     {
       "id": "export_layout",

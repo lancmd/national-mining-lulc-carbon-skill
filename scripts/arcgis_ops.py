@@ -9,11 +9,13 @@ import json
 from pathlib import Path
 from typing import Any
 
+from subsidence_water_carbon import calculate_components, calculate_invest_replacement
+
 
 SUPPORTED = {
     "describe", "project_raster", "resample", "extract_by_mask", "slope_aspect",
     "distance_accumulation", "build_raster_attribute_table", "class_area", "combine_transition",
-    "w_points_to_raster", "subsidence_water_volume", "export_layout"
+    "w_points_to_raster", "subsidence_water_volume", "subsidence_water_carbon", "export_layout"
 }
 
 
@@ -36,7 +38,10 @@ def validate(spec: dict[str, Any]) -> list[str]:
         seen.add(op_id)
         if op_type not in SUPPORTED:
             errors.append(f"operation {op_id}: unsupported type {op_type}")
-        input_optional = {"combine_transition", "w_points_to_raster", "subsidence_water_volume", "export_layout"}
+        input_optional = {
+            "combine_transition", "w_points_to_raster", "subsidence_water_volume", "subsidence_water_carbon",
+            "export_layout"
+        }
         if op_type not in input_optional and not operation.get("input"):
             errors.append(f"operation {op_id}: input is required")
         if op_type == "combine_transition" and not operation.get("inputs"):
@@ -49,6 +54,42 @@ def validate(spec: dict[str, Any]) -> list[str]:
             for field in ("dem", "subsidence_depth", "water_level_elevation_m", "water_depth_output", "volume_table"):
                 if operation.get(field) in (None, ""):
                     errors.append(f"operation {op_id}: {field} is required")
+        if op_type == "subsidence_water_carbon":
+            required = (
+                "dem", "subsidence_depth", "water_boundary", "water_level_elevation_m", "water_depth_output",
+                "aquatic_vegetation_output", "bottom_sediment_output", "volume_table", "carbon_table",
+                "water_carbon_density_g_c_m3", "aquatic_vegetation_carbon_density_t_c_ha",
+                "bottom_sediment_carbon_density_t_c_ha",
+            )
+            for field in required:
+                if operation.get(field) in (None, ""):
+                    errors.append(f"operation {op_id}: {field} is required")
+            for field in (
+                "water_level_elevation_m", "water_carbon_density_g_c_m3",
+                "aquatic_vegetation_carbon_density_t_c_ha", "bottom_sediment_carbon_density_t_c_ha",
+            ):
+                value = operation.get(field)
+                if value not in (None, "") and (not isinstance(value, (int, float)) or value < 0):
+                    errors.append(f"operation {op_id}: {field} must be a non-negative number")
+            vegetation_mask = operation.get("aquatic_vegetation_mask")
+            threshold = operation.get("aquatic_vegetation_depth_threshold_m")
+            if not vegetation_mask and (not isinstance(threshold, (int, float)) or threshold < 0):
+                errors.append(
+                    f"operation {op_id}: provide aquatic_vegetation_mask or a non-negative "
+                    "aquatic_vegetation_depth_threshold_m"
+                )
+            if not operation.get("bottom_sediment_mask") and operation.get("bottom_sediment_assume_full_waterbed") is not True:
+                errors.append(
+                    f"operation {op_id}: provide bottom_sediment_mask or set "
+                    "bottom_sediment_assume_full_waterbed to true explicitly"
+                )
+            invest_total = operation.get("invest_total_carbon_t_c")
+            invest_water = operation.get("invest_subsidence_water_carbon_t_c")
+            if (invest_total is None) != (invest_water is None):
+                errors.append(
+                    f"operation {op_id}: invest_total_carbon_t_c and "
+                    "invest_subsidence_water_carbon_t_c must be supplied together"
+                )
         if op_type == "export_layout":
             for field in ("aprx", "layout_name"):
                 if operation.get(field) in (None, ""):
@@ -63,6 +104,53 @@ def resolve(value: str, workspace: Path) -> str:
 
 def ensure_parent(value: str) -> None:
     Path(value).parent.mkdir(parents=True, exist_ok=True)
+
+
+def subsidence_water_depth(arcpy: Any, operation: dict[str, Any], workspace: Path) -> tuple[Any, float]:
+    """Construct positive water depth from a pre-mining DEM, PIM depth, level, and observed water boundary."""
+    dem = arcpy.sa.Raster(resolve(operation["dem"], workspace))
+    subsidence = arcpy.sa.Raster(resolve(operation["subsidence_depth"], workspace))
+    water_level = float(operation["water_level_elevation_m"])
+    post_mining = dem - subsidence
+    depth = arcpy.sa.SetNull(post_mining >= water_level, water_level - post_mining)
+    boundary = operation.get("water_boundary") or operation.get("mask")
+    if boundary:
+        depth = arcpy.sa.ExtractByMask(depth, resolve(boundary, workspace))
+    return depth, water_level
+
+
+def raster_metrics(arcpy: Any, raster: str, workspace: Path, metric_id: str) -> dict[str, float]:
+    """Return count, depth sum, area, and volume using tools available in ArcGIS Pro 3.0."""
+    desc = arcpy.Describe(raster)
+    pixel_area_m2 = abs(float(desc.meanCellWidth) * float(desc.meanCellHeight))
+    if str(arcpy.management.GetRasterProperties(raster, "ALLNODATA").getOutput(0)) == "1":
+        return {
+            "pixel_area_m2": pixel_area_m2,
+            "cell_count": 0.0,
+            "sum_depth_m": 0.0,
+            "area_ha": 0.0,
+            "volume_m3": 0.0,
+        }
+    zone = arcpy.sa.SetNull(arcpy.sa.IsNull(raster), 1, "VALUE = 1")
+    zone_output = resolve(f"intermediate/{metric_id}_zone.tif", workspace)
+    ensure_parent(zone_output)
+    zone.save(zone_output)
+    table = resolve(f"intermediate/{metric_id}_zonal.dbf", workspace)
+    ensure_parent(table)
+    arcpy.sa.ZonalStatisticsAsTable(zone_output, "VALUE", raster, table, "DATA", "ALL")
+    count = 0.0
+    total = 0.0
+    with arcpy.da.SearchCursor(table, ["COUNT", "SUM"]) as rows:
+        for cell_count, value_sum in rows:
+            count += float(cell_count or 0)
+            total += float(value_sum or 0)
+    return {
+        "pixel_area_m2": pixel_area_m2,
+        "cell_count": count,
+        "sum_depth_m": total,
+        "area_ha": count * pixel_area_m2 / 10000.0,
+        "volume_m3": total * pixel_area_m2,
+    }
 
 
 def describe(arcpy: Any, operation: dict[str, Any], workspace: Path) -> None:
@@ -174,6 +262,102 @@ def execute_operation(arcpy: Any, operation: dict[str, Any], workspace: Path) ->
             writer = csv.writer(stream)
             writer.writerow(["water_level_elevation_m", "sum_water_depth_m", "pixel_area_m2", "water_volume_m3"])
             writer.writerow([water_level, sum_depth, pixel_area_m2, sum_depth * pixel_area_m2])
+    elif op_type == "subsidence_water_carbon":
+        # Implements the thesis section 4.3 chain: observed water boundary + subsidence terrain -> volume -> 3 components.
+        depth, water_level = subsidence_water_depth(arcpy, operation, workspace)
+        depth_output = resolve(operation["water_depth_output"], workspace); ensure_parent(depth_output)
+        depth.save(depth_output)
+        volume = raster_metrics(arcpy, depth_output, workspace, f"{operation['id']}_water_depth")
+        if volume["cell_count"] <= 0 or volume["volume_m3"] <= 0:
+            raise RuntimeError("water boundary and terrain produced no positive water-depth cells")
+
+        if operation.get("aquatic_vegetation_mask"):
+            vegetation = arcpy.sa.ExtractByMask(
+                arcpy.sa.Raster(depth_output), resolve(operation["aquatic_vegetation_mask"], workspace)
+            )
+            vegetation_basis = "observed_or_interpreted_aquatic_vegetation_mask"
+        else:
+            threshold = float(operation["aquatic_vegetation_depth_threshold_m"])
+            vegetation = arcpy.sa.SetNull(arcpy.sa.Raster(depth_output) > threshold, arcpy.sa.Raster(depth_output))
+            vegetation_basis = f"water_depth_less_than_or_equal_to_{threshold}_m"
+        vegetation_output = resolve(operation["aquatic_vegetation_output"], workspace); ensure_parent(vegetation_output)
+        vegetation.save(vegetation_output)
+        vegetation_area = raster_metrics(
+            arcpy, vegetation_output, workspace, f"{operation['id']}_aquatic_vegetation"
+        )["area_ha"]
+
+        if operation.get("bottom_sediment_mask"):
+            sediment = arcpy.sa.ExtractByMask(arcpy.sa.Raster(depth_output), resolve(operation["bottom_sediment_mask"], workspace))
+            sediment_basis = "observed_or_interpreted_bottom_sediment_mask"
+        else:
+            sediment = arcpy.sa.Raster(depth_output)
+            sediment_basis = "full_waterbed_explicit_assumption"
+        sediment_output = resolve(operation["bottom_sediment_output"], workspace); ensure_parent(sediment_output)
+        sediment.save(sediment_output)
+        sediment_area = raster_metrics(
+            arcpy, sediment_output, workspace, f"{operation['id']}_bottom_sediment"
+        )["area_ha"]
+
+        components = calculate_components(
+            water_volume_m3=volume["volume_m3"],
+            water_carbon_density_g_c_m3=float(operation["water_carbon_density_g_c_m3"]),
+            aquatic_vegetation_area_ha=vegetation_area,
+            aquatic_vegetation_carbon_density_t_c_ha=float(operation["aquatic_vegetation_carbon_density_t_c_ha"]),
+            bottom_sediment_area_ha=sediment_area,
+            bottom_sediment_carbon_density_t_c_ha=float(operation["bottom_sediment_carbon_density_t_c_ha"]),
+        )
+        enhanced_total: float | str = ""
+        if operation.get("invest_total_carbon_t_c") is not None:
+            enhanced_total = calculate_invest_replacement(
+                invest_total_carbon_t_c=float(operation["invest_total_carbon_t_c"]),
+                invest_subsidence_water_carbon_t_c=float(operation["invest_subsidence_water_carbon_t_c"]),
+                composite_carbon_t_c=components["subsidence_water_composite_carbon_t_c"],
+            )
+
+        volume_table = resolve(operation["volume_table"], workspace); ensure_parent(volume_table)
+        with open(volume_table, "w", newline="", encoding="utf-8-sig") as stream:
+            writer = csv.DictWriter(stream, fieldnames=[
+                "water_level_elevation_m", "pixel_area_m2", "water_cell_count", "water_area_ha",
+                "sum_water_depth_m", "water_volume_m3", "water_boundary"
+            ])
+            writer.writeheader()
+            writer.writerow({
+                "water_level_elevation_m": water_level,
+                "pixel_area_m2": volume["pixel_area_m2"],
+                "water_cell_count": volume["cell_count"],
+                "water_area_ha": volume["area_ha"],
+                "sum_water_depth_m": volume["sum_depth_m"],
+                "water_volume_m3": volume["volume_m3"],
+                "water_boundary": operation["water_boundary"],
+            })
+        carbon_table = resolve(operation["carbon_table"], workspace); ensure_parent(carbon_table)
+        with open(carbon_table, "w", newline="", encoding="utf-8-sig") as stream:
+            writer = csv.DictWriter(stream, fieldnames=[
+                "water_volume_m3", "water_carbon_density_g_c_m3", "water_carbon_t_c",
+                "aquatic_vegetation_basis", "aquatic_vegetation_area_ha",
+                "aquatic_vegetation_carbon_density_t_c_ha", "aquatic_vegetation_carbon_t_c",
+                "bottom_sediment_basis", "bottom_sediment_area_ha", "bottom_sediment_carbon_density_t_c_ha",
+                "bottom_sediment_carbon_t_c", "subsidence_water_composite_carbon_t_c",
+                "invest_total_carbon_t_c", "invest_subsidence_water_carbon_t_c", "enhanced_invest_total_carbon_t_c",
+            ])
+            writer.writeheader()
+            writer.writerow({
+                "water_volume_m3": volume["volume_m3"],
+                "water_carbon_density_g_c_m3": operation["water_carbon_density_g_c_m3"],
+                "water_carbon_t_c": components["water_carbon_t_c"],
+                "aquatic_vegetation_basis": vegetation_basis,
+                "aquatic_vegetation_area_ha": vegetation_area,
+                "aquatic_vegetation_carbon_density_t_c_ha": operation["aquatic_vegetation_carbon_density_t_c_ha"],
+                "aquatic_vegetation_carbon_t_c": components["aquatic_vegetation_carbon_t_c"],
+                "bottom_sediment_basis": sediment_basis,
+                "bottom_sediment_area_ha": sediment_area,
+                "bottom_sediment_carbon_density_t_c_ha": operation["bottom_sediment_carbon_density_t_c_ha"],
+                "bottom_sediment_carbon_t_c": components["bottom_sediment_carbon_t_c"],
+                "subsidence_water_composite_carbon_t_c": components["subsidence_water_composite_carbon_t_c"],
+                "invest_total_carbon_t_c": operation.get("invest_total_carbon_t_c", ""),
+                "invest_subsidence_water_carbon_t_c": operation.get("invest_subsidence_water_carbon_t_c", ""),
+                "enhanced_invest_total_carbon_t_c": enhanced_total,
+            })
     elif op_type == "export_layout":
         aprx = arcpy.mp.ArcGISProject(resolve(operation["aprx"], workspace))
         layouts = [item for item in aprx.listLayouts() if item.name == operation["layout_name"]]

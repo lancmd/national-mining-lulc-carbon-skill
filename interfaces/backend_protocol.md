@@ -64,6 +64,8 @@
 
 后端可扩展操作，但必须在 `system.capabilities` 中返回名称、参数模式、软件版本和限制。
 
+`arcgis.run_operations` 支持 `subsidence_water_carbon`：该操作以遥感沉陷积水边界、预采 DEM、正下沉深度、同一垂直基准的水面高程和用户碳密度为输入，输出水深栅格、库容表、水生植被/底泥覆盖栅格及三组分碳表。它不接收彩色云图作为数值输入。
+
 ### PLUS 资源开采情景（RE）参数契约
 
 项目默认 PLUS 情景为 `ND`、`UD`、`EP`、`RE`。调用 `RE` 时，`parameters.resource_extraction` 必须至少包含：
