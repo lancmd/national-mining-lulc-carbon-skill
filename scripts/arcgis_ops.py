@@ -12,7 +12,8 @@ from typing import Any
 
 SUPPORTED = {
     "describe", "project_raster", "resample", "extract_by_mask", "slope_aspect",
-    "distance_accumulation", "build_raster_attribute_table", "class_area", "combine_transition"
+    "distance_accumulation", "build_raster_attribute_table", "class_area", "combine_transition",
+    "w_points_to_raster", "subsidence_water_volume", "export_layout"
 }
 
 
@@ -35,10 +36,23 @@ def validate(spec: dict[str, Any]) -> list[str]:
         seen.add(op_id)
         if op_type not in SUPPORTED:
             errors.append(f"operation {op_id}: unsupported type {op_type}")
-        if op_type != "combine_transition" and not operation.get("input"):
+        input_optional = {"combine_transition", "w_points_to_raster", "subsidence_water_volume", "export_layout"}
+        if op_type not in input_optional and not operation.get("input"):
             errors.append(f"operation {op_id}: input is required")
         if op_type == "combine_transition" and not operation.get("inputs"):
             errors.append(f"operation {op_id}: inputs are required")
+        if op_type == "w_points_to_raster":
+            for field in ("table", "x_field", "y_field", "value_field", "output", "cell_size", "coordinate_system"):
+                if operation.get(field) in (None, ""):
+                    errors.append(f"operation {op_id}: {field} is required")
+        if op_type == "subsidence_water_volume":
+            for field in ("dem", "subsidence_depth", "water_level_elevation_m", "water_depth_output", "volume_table"):
+                if operation.get(field) in (None, ""):
+                    errors.append(f"operation {op_id}: {field} is required")
+        if op_type == "export_layout":
+            for field in ("aprx", "layout_name"):
+                if operation.get(field) in (None, ""):
+                    errors.append(f"operation {op_id}: {field} is required")
     return errors
 
 
@@ -125,6 +139,54 @@ def execute_operation(arcpy: Any, operation: dict[str, Any], workspace: Path) ->
             with arcpy.da.SearchCursor(combined, [fields[0], fields[1], "COUNT"]) as rows:
                 for old, new, count in rows:
                     writer.writerow([old, new, count, count * area_ha])
+    elif op_type == "w_points_to_raster":
+        table = resolve(operation["table"], workspace)
+        points = resolve(operation.get("points_output", f"intermediate/{operation['id']}_points.shp"), workspace)
+        output = resolve(operation["output"], workspace)
+        ensure_parent(points); ensure_parent(output)
+        arcpy.management.XYTableToPoint(table, points, operation["x_field"], operation["y_field"], None,
+                                        operation["coordinate_system"])
+        arcpy.conversion.PointToRaster(points, operation["value_field"], output, "MEAN", "NONE", operation["cell_size"])
+    elif op_type == "subsidence_water_volume":
+        dem = arcpy.sa.Raster(resolve(operation["dem"], workspace))
+        subsidence = arcpy.sa.Raster(resolve(operation["subsidence_depth"], workspace))
+        water_level = float(operation["water_level_elevation_m"])
+        post_mining = dem - subsidence
+        depth = arcpy.sa.SetNull(post_mining >= water_level, water_level - post_mining)
+        if operation.get("mask"):
+            depth = arcpy.sa.ExtractByMask(depth, resolve(operation["mask"], workspace))
+        depth_output = resolve(operation["water_depth_output"], workspace); ensure_parent(depth_output)
+        depth.save(depth_output)
+        zone = arcpy.sa.SetNull(arcpy.sa.IsNull(depth), 1, "VALUE = 1")
+        zone_output = resolve(operation.get("zone_output", f"intermediate/{operation['id']}_zone.tif"), workspace)
+        ensure_parent(zone_output); zone.save(zone_output)
+        table = resolve(operation.get("zonal_table", f"intermediate/{operation['id']}_zonal.dbf"), workspace)
+        ensure_parent(table)
+        arcpy.sa.ZonalStatisticsAsTable(zone_output, "VALUE", depth_output, table, "DATA", "SUM")
+        sum_depth = 0.0
+        with arcpy.da.SearchCursor(table, ["SUM"]) as rows:
+            for (value,) in rows:
+                sum_depth += float(value or 0)
+        desc = arcpy.Describe(depth_output)
+        pixel_area_m2 = abs(float(desc.meanCellWidth) * float(desc.meanCellHeight))
+        volume_table = resolve(operation["volume_table"], workspace); ensure_parent(volume_table)
+        with open(volume_table, "w", newline="", encoding="utf-8-sig") as stream:
+            writer = csv.writer(stream)
+            writer.writerow(["water_level_elevation_m", "sum_water_depth_m", "pixel_area_m2", "water_volume_m3"])
+            writer.writerow([water_level, sum_depth, pixel_area_m2, sum_depth * pixel_area_m2])
+    elif op_type == "export_layout":
+        aprx = arcpy.mp.ArcGISProject(resolve(operation["aprx"], workspace))
+        layouts = [item for item in aprx.listLayouts() if item.name == operation["layout_name"]]
+        if not layouts:
+            raise RuntimeError(f"layout not found: {operation['layout_name']}")
+        layout = layouts[0]
+        resolution = int(operation.get("resolution", 300))
+        if operation.get("pdf"):
+            pdf = resolve(operation["pdf"], workspace); ensure_parent(pdf)
+            layout.exportToPDF(pdf, resolution=resolution)
+        if operation.get("png"):
+            png = resolve(operation["png"], workspace); ensure_parent(png)
+            layout.exportToPNG(png, resolution=resolution)
 
 
 def main() -> int:

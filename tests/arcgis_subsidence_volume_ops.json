@@ -1,0 +1,19 @@
+{
+  "environment": {
+    "overwriteOutput": true,
+    "snapRaster": "dem.tif",
+    "cellSize": "dem.tif",
+    "extent": "dem.tif"
+  },
+  "operations": [
+    {
+      "id": "volume",
+      "type": "subsidence_water_volume",
+      "dem": "dem.tif",
+      "subsidence_depth": "subsidence_depth.tif",
+      "water_level_elevation_m": 99,
+      "water_depth_output": "water_depth.tif",
+      "volume_table": "validation/water_volume.csv"
+    }
+  ]
+}

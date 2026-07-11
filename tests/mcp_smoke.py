@@ -25,9 +25,9 @@ async def run() -> None:
             tools = await session.list_tools()
             names = {tool.name for tool in tools.tools}
             expected = {
-                "list_backends", "backend_capabilities", "inspect_dataset", "run_gee_export",
+                "list_backends", "backend_capabilities", "inspect_dataset", "validate_local_project", "run_gee_export",
                 "run_envi_classification", "run_arcgis_operations", "run_plus_scenario",
-                "run_invest_carbon", "validate_lulc_model", "run_pytorch_lulc",
+                "run_invest_carbon", "validate_lulc_model", "run_pytorch_lulc", "evaluate_ecosystem_services",
                 "get_job_status", "cancel_job", "list_job_outputs",
             }
             missing = expected - names
@@ -35,8 +35,21 @@ async def run() -> None:
                 raise AssertionError(f"missing MCP tools: {sorted(missing)}")
             result = await session.call_tool("list_backends", {})
             payload = json.loads(result.content[0].text)
-            if not {"gee", "envi", "plus", "arcgis", "invest", "pytorch"}.issubset(payload["backends"]):
+            if not {"gee", "envi", "plus", "arcgis", "invest", "pytorch", "project", "ecosystem"}.issubset(payload["backends"]):
                 raise AssertionError("backend registry is incomplete")
+            project_file = ROOT / "tests" / "fixtures" / "local_project" / "project.json"
+            project_result = await session.call_tool("validate_local_project", {"project_file": str(project_file)})
+            project_validation = json.loads(project_result.content[0].text)
+            if project_validation.get("status") != "completed":
+                raise AssertionError(f"local project validation failed: {project_validation}")
+            ecosystem_result = await session.call_tool("evaluate_ecosystem_services", {
+                "criteria_table": str(ROOT / "tests" / "fixtures" / "ecosystem_criteria.csv"),
+                "config": str(ROOT / "templates" / "ecosystem_service_config.json"),
+                "output": str(ROOT / "outputs" / "mcp_ecosystem_smoke.csv"),
+            })
+            ecosystem = json.loads(ecosystem_result.content[0].text)
+            if ecosystem.get("status") != "completed":
+                raise AssertionError(f"ecosystem MCP evaluation failed: {ecosystem}")
             capability_result = await session.call_tool("backend_capabilities", {"backend": "arcgis"})
             capability = json.loads(capability_result.content[0].text)
             if capability.get("status") != "completed":
@@ -48,6 +61,8 @@ async def run() -> None:
             if model_validation.get("status") != "completed":
                 raise AssertionError(f"PyTorch model contract validation failed: {model_validation}")
             end_to_end["pytorch_model"] = model_validation["result"]["model_id"]
+            end_to_end["local_project"] = project_validation["result"]["project_id"]
+            end_to_end["ecosystem_method"] = ecosystem["result"]["method"]
             runtime_package = ROOT / "outputs" / "pytorch_smoke" / "model_package"
             runtime_input = ROOT / "outputs" / "pytorch_smoke" / "input.tif"
             if runtime_package.exists() and runtime_input.exists():

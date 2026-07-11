@@ -1,0 +1,29 @@
+{
+  "environment": {
+    "overwriteOutput": true,
+    "snapRaster": "replace_with_master_lulc.tif",
+    "cellSize": "replace_with_master_lulc.tif",
+    "extent": "replace_with_master_lulc.tif"
+  },
+  "operations": [
+    {
+      "id": "subsidence_water_volume",
+      "type": "subsidence_water_volume",
+      "dem": "replace_with_pre_mining_dem.tif",
+      "subsidence_depth": "replace_with_positive_subsidence_depth.tif",
+      "water_level_elevation_m": 0.0,
+      "mask": "replace_with_mine_or_workface_boundary.shp",
+      "water_depth_output": "outputs/subsidence_water_depth.tif",
+      "volume_table": "outputs/subsidence_water_volume.csv"
+    },
+    {
+      "id": "export_layout",
+      "type": "export_layout",
+      "aprx": "replace_with_project.aprx",
+      "layout_name": "replace_with_layout_name",
+      "pdf": "outputs/maps/final_layout.pdf",
+      "png": "outputs/maps/final_layout.png",
+      "resolution": 300
+    }
+  ]
+}

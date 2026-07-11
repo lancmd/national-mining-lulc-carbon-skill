@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "method": "minmax",
+  "id_field": "unit_id",
+  "criteria": [
+    {"field": "carbon_storage", "direction": "benefit", "weight": 0.30},
+    {"field": "water_regulation", "direction": "benefit", "weight": 0.25},
+    {"field": "habitat_quality", "direction": "benefit", "weight": 0.25},
+    {"field": "disturbance", "direction": "cost", "weight": 0.20}
+  ],
+  "ahp": {
+    "pairwise_matrix": [
+      [1, 2, 2, 3],
+      [0.5, 1, 1, 2],
+      [0.5, 1, 1, 2],
+      [0.3333333333, 0.5, 0.5, 1]
+    ],
+    "consistency_threshold": 0.1
+  }
+}

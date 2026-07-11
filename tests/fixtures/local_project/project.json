@@ -1,0 +1,24 @@
+{
+  "schema_version": 2,
+  "project_id": "local-project-smoke",
+  "workspace": "../../../outputs/local_project_smoke",
+  "inputs": {
+    "imagery": ["imagery.tif"],
+    "roi": "roi.gpkg",
+    "mine_boundary": "mine_boundary.gpkg",
+    "carbon_density": "carbon_density.csv",
+    "model_package": "../model_package",
+    "lulc_baseline": null,
+    "training_roi": null,
+    "dem": null,
+    "water_surface_elevation_m": null,
+    "subsidence_depth_raster": null,
+    "subsidence_w_dat": null,
+    "driver_factors": {}
+  },
+  "classification": {"enabled": true, "engine": "pytorch", "scheme": "high_water_coal_7class"},
+  "plus": {"enabled": false},
+  "invest": {"enabled": true},
+  "subsidence_water": {"enabled": false},
+  "ecosystem_service": {"enabled": false}
+}

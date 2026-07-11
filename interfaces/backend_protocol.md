@@ -59,6 +59,8 @@
 | `invest.run_carbon` | InVEST | `datastack`, `workspace` |
 | `pytorch.validate_model` | PyTorch | `model_package` |
 | `pytorch.run_lulc_inference` | PyTorch | `model_package`, `input_raster`, `class_output`, `confidence_output` |
+| `project.validate` | Project validator | `project_file` |
+| `ecosystem.evaluate` | Local ecosystem evaluator | `criteria_table`, `config`, `output` |
 
 后端可扩展操作，但必须在 `system.capabilities` 中返回名称、参数模式、软件版本和限制。
 

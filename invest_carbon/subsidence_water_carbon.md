@@ -56,6 +56,16 @@ volume_m3 = Σ(depth_m × pixel_area_m2)
 
 所有高程必须使用同一垂直基准和单位。PIM 下沉等值线只能在已知基准地形、水面高程和边界匹配可靠时参与库容反演；不能把下沉量直接当作水深。
 
+若输入为外部 PIM 软件的 `w.dat`，先使用 `scripts/wdat_to_depth.py` 标准化为正的 `subsidence_depth_m`，再在 ArcGIS Pro 中栅格化和对齐。以正下沉深度为例：
+
+```text
+post_mining_elevation = pre_mining_dem - subsidence_depth_m
+water_depth = max(water_level_elevation - post_mining_elevation, 0)
+water_volume = Σ(water_depth × pixel_area)
+```
+
+因此 `w.dat` 能参与库容判断，但还必须有基准 DEM、水面高程、同一坐标与垂直基准；工作面范围只能作为裁剪/约束，不能单独给出库容。
+
 ## 4. 水生植被面积
 
 论文案例根据实地调查确定临界水深，再以水深带估算可生长面积。该阈值具有物种和场地依赖性，论文案例的 1.2 m 不能作为全国默认值。

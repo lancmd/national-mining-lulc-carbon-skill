@@ -32,6 +32,16 @@
       "transport": "command",
       "command": ["{python}", "{skill_root}/scripts/pytorch_backend.py"],
       "capabilities": ["pytorch.validate_model", "pytorch.run_lulc_inference"]
+    },
+    "project": {
+      "transport": "command",
+      "command": ["{python}", "{skill_root}/scripts/project_backend.py"],
+      "capabilities": ["project.validate"]
+    },
+    "ecosystem": {
+      "transport": "command",
+      "command": ["{python}", "{skill_root}/scripts/ecosystem_backend.py"],
+      "capabilities": ["ecosystem.evaluate"]
     }
   }
 }

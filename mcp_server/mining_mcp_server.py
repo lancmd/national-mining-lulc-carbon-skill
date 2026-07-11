@@ -145,6 +145,12 @@ def inspect_dataset(path: str, backend: str = "arcgis") -> str:
 
 
 @mcp.tool()
+def validate_local_project(project_file: str, backend: str = "project") -> str:
+    """Validate all local imagery, ROI, carbon-density, driver-factor and optional subsidence inputs before execution."""
+    return json_result(registry.call(backend, "project.validate", {"project_file": project_file}))
+
+
+@mcp.tool()
 def run_gee_export(template: str, variables: dict[str, Any], destination: dict[str, Any], backend: str = "gee") -> str:
     """Submit a parameterized Earth Engine imagery/index/export workflow and return its job id or completed outputs."""
     return json_result(registry.call(backend, "gee.export_imagery", {
@@ -198,6 +204,15 @@ def run_pytorch_lulc(model_package: str, input_raster: str, class_output: str,
     return json_result(registry.call(backend, "pytorch.run_lulc_inference", {
         "model_package": model_package, "input_raster": input_raster,
         "class_output": class_output, "confidence_output": confidence_output, "device": device
+    }))
+
+
+@mcp.tool()
+def evaluate_ecosystem_services(criteria_table: str, config: str, output: str,
+                                backend: str = "ecosystem") -> str:
+    """Evaluate ecosystem services with configured Min-Max or AHP weights and write a score table."""
+    return json_result(registry.call(backend, "ecosystem.evaluate", {
+        "criteria_table": criteria_table, "config": config, "output": output
     }))
 
 

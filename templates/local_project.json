@@ -1,0 +1,73 @@
+{
+  "schema_version": 2,
+  "project_id": "replace_me",
+  "workspace": "../outputs/replace_me",
+  "inputs": {
+    "imagery": ["replace_with_local_multiband_image.tif"],
+    "roi": "replace_with_roi.gpkg",
+    "mine_boundary": "replace_with_mine_boundary.gpkg",
+    "carbon_density": "replace_with_carbon_density.csv",
+    "lulc_baseline": null,
+    "training_roi": null,
+    "model_package": null,
+    "dem": null,
+    "water_surface_elevation_m": null,
+    "subsidence_depth_raster": null,
+    "subsidence_w_dat": null,
+    "driver_factors": {
+      "dem": null,
+      "slope": null,
+      "aspect": null,
+      "population": null,
+      "gdp": null,
+      "temperature": null,
+      "precipitation": null,
+      "road_distance": null,
+      "railway_distance": null,
+      "river_distance": null,
+      "mine_distance": null
+    }
+  },
+  "classification": {
+    "enabled": true,
+    "engine": "pytorch",
+    "scheme": "high_water_coal_7class",
+    "output_lulc": "outputs/lulc.tif",
+    "output_confidence": "outputs/lulc_confidence.tif",
+    "envi_method": "maximum_likelihood"
+  },
+  "plus": {
+    "enabled": false,
+    "baseline_year": 2025,
+    "target_year": 2030,
+    "scenarios": ["ND", "EP", "RE"],
+    "output_workspace": "outputs/plus"
+  },
+  "invest": {
+    "enabled": true,
+    "lulc_source": "classification",
+    "output_workspace": "outputs/invest"
+  },
+  "subsidence_water": {
+    "enabled": false,
+    "mode": "classify_only",
+    "workface_boundary": null,
+    "water_level_elevation_m": null,
+    "output_depth_raster": "outputs/subsidence_water_depth.tif",
+    "output_volume_table": "outputs/subsidence_water_volume.csv"
+  },
+  "ecosystem_service": {
+    "enabled": false,
+    "method": "minmax",
+    "criteria_table": "replace_with_ecosystem_criteria.csv",
+    "config": "../templates/ecosystem_service_config.json",
+    "output_table": "outputs/ecosystem_service_scores.csv"
+  },
+  "gis_outputs": {
+    "enabled": true,
+    "aprx": null,
+    "layout_name": null,
+    "pdf": "outputs/maps/final_layout.pdf",
+    "png": "outputs/maps/final_layout.png"
+  }
+}
