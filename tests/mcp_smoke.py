@@ -37,6 +37,12 @@ async def run() -> None:
             payload = json.loads(result.content[0].text)
             if not {"gee", "envi", "plus", "arcgis", "invest", "pytorch", "project", "ecosystem"}.issubset(payload["backends"]):
                 raise AssertionError("backend registry is incomplete")
+            invalid_re = await session.call_tool("run_plus_scenario", {
+                "project": "example", "scenario": "RE", "workspace": str(ROOT / "outputs"), "parameters": {}
+            })
+            invalid_re_payload = json.loads(invalid_re.content[0].text)
+            if invalid_re_payload.get("status") != "failed" or "resource_extraction" not in invalid_re_payload.get("error", ""):
+                raise AssertionError(f"RE input contract was not enforced: {invalid_re_payload}")
             project_file = ROOT / "tests" / "fixtures" / "local_project" / "project.json"
             project_result = await session.call_tool("validate_local_project", {"project_file": str(project_file)})
             project_validation = json.loads(project_result.content[0].text)

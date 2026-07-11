@@ -13,6 +13,7 @@ from typing import Any
 REQUIRED_CARBON_COLUMNS = {"lucode", "c_above", "c_below", "c_soil", "c_dead"}
 VALID_ENGINES = {"envi", "pytorch", "provided_lulc"}
 VALID_ECOSYSTEM_METHODS = {"minmax", "ahp"}
+VALID_PLUS_SCENARIOS = {"ND", "UD", "EP", "RE"}
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -94,12 +95,58 @@ def validate(project_path: Path) -> dict[str, Any]:
         supplied = [key for key, value in factors.items() if value]
         if not supplied:
             errors.append("PLUS requires local driver_factors")
-        if not plus.get("scenarios"):
+        scenarios = plus.get("scenarios")
+        if not isinstance(scenarios, list) or not scenarios:
             errors.append("PLUS requires at least one scenario")
+            scenario_codes: list[str] = []
+        else:
+            scenario_codes = [str(item).strip().upper() for item in scenarios]
+            invalid = sorted(set(scenario_codes) - VALID_PLUS_SCENARIOS)
+            if invalid:
+                errors.append(f"PLUS scenarios must be within {sorted(VALID_PLUS_SCENARIOS)}; got {invalid}")
+            if len(set(scenario_codes)) != len(scenario_codes):
+                errors.append("PLUS scenarios must not contain duplicates")
         if plus.get("target_year", 0) <= plus.get("baseline_year", 0):
             errors.append("PLUS target_year must be later than baseline_year")
         for key in supplied:
             required_path(f"driver_factors.{key}", factors[key], base, errors)
+
+        if "RE" in scenario_codes:
+            resource = plus.get("resource_extraction")
+            if not isinstance(resource, dict):
+                errors.append("PLUS RE requires plus.resource_extraction configuration")
+            else:
+                if resource.get("core_driver") != "subsidence_depth":
+                    errors.append("PLUS RE core_driver must be subsidence_depth")
+                if resource.get("core_driver_unit") != "m":
+                    errors.append("PLUS RE subsidence depth must use metres (core_driver_unit = m)")
+                if resource.get("core_driver_convention") != "positive_down":
+                    errors.append("PLUS RE subsidence depth must be a non-negative positive_down raster")
+                if resource.get("requires_master_grid_alignment") is not True:
+                    errors.append("PLUS RE requires subsidence depth aligned to the LULC master grid")
+                additional = resource.get("additional_driver_factors")
+                if not isinstance(additional, list) or not additional:
+                    errors.append("PLUS RE requires at least one additional driver factor besides subsidence depth")
+                else:
+                    for factor in additional:
+                        if factor not in factors:
+                            errors.append(f"PLUS RE additional driver is not declared in inputs.driver_factors: {factor}")
+                        elif not factors.get(factor):
+                            errors.append(f"PLUS RE additional driver is missing: driver_factors.{factor}")
+                if inputs.get("subsidence_w_dat"):
+                    source = resource.get("w_dat_preprocessing", {})
+                    if source.get("source_unit") not in {"m", "mm"}:
+                        errors.append("PLUS RE w.dat source_unit must be m or mm")
+                    if source.get("source_convention") not in {"negative_down", "positive_down"}:
+                        errors.append("PLUS RE w.dat source_convention must be negative_down or positive_down")
+
+            # PLUS receives the processed analysis raster, not raw W points or a rendered cloud map.
+            required_path("subsidence_depth_raster", inputs.get("subsidence_depth_raster"), base, errors)
+            if inputs.get("subsidence_w_dat"):
+                required_path("subsidence_w_dat", inputs.get("subsidence_w_dat"), base, errors)
+                warnings.append("RE uses the aligned positive subsidence-depth raster; w.dat is retained as the external PIM source record.")
+            if inputs.get("workface_boundary"):
+                required_path("workface_boundary", inputs.get("workface_boundary"), base, errors)
 
     subsidence = project.get("subsidence_water", {})
     if subsidence.get("enabled") and subsidence.get("mode") == "estimate_volume":

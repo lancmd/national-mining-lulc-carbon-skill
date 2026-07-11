@@ -1,0 +1,56 @@
+{
+  "schema_version": 2,
+  "project_id": "plus-re-contract-smoke",
+  "workspace": "../../../outputs/plus_re_contract_smoke",
+  "inputs": {
+    "imagery": ["imagery.tif"],
+    "roi": "roi.gpkg",
+    "mine_boundary": "mine_boundary.gpkg",
+    "carbon_density": "carbon_density.csv",
+    "lulc_baseline": "imagery.tif",
+    "training_roi": null,
+    "model_package": null,
+    "dem": null,
+    "water_surface_elevation_m": null,
+    "subsidence_depth_raster": "subsidence_depth_aligned.tif",
+    "subsidence_w_dat": "external_w.dat",
+    "workface_boundary": "workface.gpkg",
+    "driver_factors": {
+      "dem": "driver_dem.tif",
+      "slope": "driver_slope.tif",
+      "road_distance": "driver_road_distance.tif",
+      "mine_distance": "driver_mine_distance.tif"
+    }
+  },
+  "classification": {
+    "enabled": false,
+    "engine": "provided_lulc",
+    "scheme": "high_water_coal_7class"
+  },
+  "plus": {
+    "enabled": true,
+    "baseline_year": 2025,
+    "target_year": 2030,
+    "scenarios": ["ND", "UD", "EP", "RE"],
+    "output_workspace": "outputs/plus",
+    "resource_extraction": {
+      "core_driver": "subsidence_depth",
+      "core_driver_input": "inputs.subsidence_depth_raster",
+      "core_driver_unit": "m",
+      "core_driver_convention": "positive_down",
+      "requires_master_grid_alignment": true,
+      "additional_driver_factors": ["dem", "slope", "road_distance", "mine_distance"],
+      "water_susceptibility": null,
+      "w_dat_preprocessing": {
+        "source_unit": "mm",
+        "source_convention": "negative_down",
+        "output_depth_unit": "m",
+        "output_depth_convention": "positive_down"
+      }
+    }
+  },
+  "invest": {"enabled": false},
+  "subsidence_water": {"enabled": false},
+  "ecosystem_service": {"enabled": false},
+  "gis_outputs": {"enabled": false}
+}

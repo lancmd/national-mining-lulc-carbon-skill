@@ -20,6 +20,7 @@ from mcp.server.fastmcp import FastMCP
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_REGISTRY = ROOT / "interfaces" / "backend_registry.json"
 EXAMPLE_REGISTRY = ROOT / "interfaces" / "backend_registry.example.json"
+VALID_PLUS_SCENARIOS = frozenset({"ND", "UD", "EP", "RE"})
 
 
 def json_result(value: Any) -> str:
@@ -179,9 +180,26 @@ def run_arcgis_operations(spec: dict[str, Any], workspace: str, backend: str = "
 @mcp.tool()
 def run_plus_scenario(project: str, scenario: str, workspace: str,
                       parameters: dict[str, Any] | None = None, backend: str = "plus") -> str:
-    """Run a configured PLUS scenario through its registered bridge; do not invent version-specific parameters."""
+    """Run ND, UD, EP, or RE through PLUS. RE requires an aligned positive subsidence-depth TIFF plus other drivers."""
+    scenario_code = scenario.strip().upper()
+    if scenario_code not in VALID_PLUS_SCENARIOS:
+        return json_result({"status": "failed", "error": f"PLUS scenario must be one of {sorted(VALID_PLUS_SCENARIOS)}"})
+    scenario_parameters = parameters or {}
+    if scenario_code == "RE":
+        resource = scenario_parameters.get("resource_extraction")
+        if not isinstance(resource, dict):
+            return json_result({"status": "failed", "error": "RE requires parameters.resource_extraction"})
+        if resource.get("core_driver") != "subsidence_depth":
+            return json_result({"status": "failed", "error": "RE core_driver must be subsidence_depth"})
+        if not resource.get("subsidence_depth_raster"):
+            return json_result({"status": "failed", "error": "RE requires an aligned subsidence_depth_raster, not raw w.dat or a rendered cloud image"})
+        if resource.get("depth_unit") != "m" or resource.get("depth_convention") != "positive_down":
+            return json_result({"status": "failed", "error": "RE depth raster must use metres and the positive_down convention"})
+        additional = resource.get("additional_driver_factors")
+        if not isinstance(additional, list) or not additional:
+            return json_result({"status": "failed", "error": "RE requires one or more additional driver factors"})
     return json_result(registry.call(backend, "plus.run_scenario", {
-        "project": project, "scenario": scenario, "workspace": workspace, "parameters": parameters or {}
+        "project": project, "scenario": scenario_code, "workspace": workspace, "parameters": scenario_parameters
     }))
 
 

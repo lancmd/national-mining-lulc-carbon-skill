@@ -55,7 +55,7 @@
 | `gee.export_imagery` | GEE | `template`, `variables`, `destination` |
 | `envi.supervised_classification` | ENVI | `input_raster`, `training_vector`, `output_raster`, `method` |
 | `arcgis.run_operations` | ArcGIS | `spec`, `workspace` |
-| `plus.run_scenario` | PLUS | `project`, `scenario`, `workspace` |
+| `plus.run_scenario` | PLUS | `project`, `scenario` (`ND`/`UD`/`EP`/`RE`), `workspace`; `RE` additionally requires `parameters.resource_extraction` |
 | `invest.run_carbon` | InVEST | `datastack`, `workspace` |
 | `pytorch.validate_model` | PyTorch | `model_package` |
 | `pytorch.run_lulc_inference` | PyTorch | `model_package`, `input_raster`, `class_output`, `confidence_output` |
@@ -63,6 +63,22 @@
 | `ecosystem.evaluate` | Local ecosystem evaluator | `criteria_table`, `config`, `output` |
 
 后端可扩展操作，但必须在 `system.capabilities` 中返回名称、参数模式、软件版本和限制。
+
+### PLUS 资源开采情景（RE）参数契约
+
+项目默认 PLUS 情景为 `ND`、`UD`、`EP`、`RE`。调用 `RE` 时，`parameters.resource_extraction` 必须至少包含：
+
+```json
+{
+  "core_driver": "subsidence_depth",
+  "subsidence_depth_raster": "D:/project/intermediate/subsidence_depth_aligned.tif",
+  "depth_unit": "m",
+  "depth_convention": "positive_down",
+  "additional_driver_factors": ["dem", "slope", "road_distance", "mine_distance"]
+}
+```
+
+`subsidence_depth_raster` 是由外部概率积分法软件输出的 `w.dat`/`w.txt` 或等价结果，经单位、符号、地理参考核验、栅格化并对齐 PLUS 主网格后的连续数值栅格。它是 RE 的核心驱动因子，但不替代 DEM、地形、区位、社会经济、工作面或开采规划等其他因素。原始 `w.dat`、彩色沉陷云图和等值线图不能直接传给 PLUS；本项目也不计算概率积分法下沉值。
 
 软件插件可直接实现 socket 协议，也可用 `scripts/bridge_server.py --handler package.module:handle --port <端口>` 暴露一个 Python `handle(request) -> response` 函数。GEE/PLUS 的服务化后端通常使用 HTTP；QGIS、ArcGIS、ENVI 等桌面进程通常使用 socket 或软件插件；容器与命令行工具可使用 command transport。
 

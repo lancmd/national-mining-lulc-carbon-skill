@@ -26,7 +26,7 @@ python -m pip install -e "mcp_server[pytorch]"
 python scripts/project_validator.py --project <project.json>
 ```
 
-再按项目设置选择 ENVI 或 PyTorch 分类，运行 PLUS、InVEST、沉陷积水库容和 Min-Max/AHP 生态服务。每个空间结果最终通过 ArcGIS Pro 布局导出 PDF/PNG。
+再按项目设置选择 ENVI 或 PyTorch 分类，运行 PLUS、InVEST、沉陷积水库容和 Min-Max/AHP 生态服务。PLUS 默认输出 ND（自然发展）、UD（城镇发展）、EP（生态保护）、RE（资源开采）四种情景；RE 以外部概率积分法结果转换并对齐后的正下沉深度 TIF 为核心驱动，同时保留其他驱动因子。每个空间结果最终通过 ArcGIS Pro 布局导出 PDF/PNG。
 
 ## 目录
 

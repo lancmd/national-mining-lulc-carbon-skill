@@ -14,6 +14,7 @@
     "water_surface_elevation_m": null,
     "subsidence_depth_raster": null,
     "subsidence_w_dat": null,
+    "workface_boundary": null,
     "driver_factors": {
       "dem": null,
       "slope": null,
@@ -40,8 +41,23 @@
     "enabled": false,
     "baseline_year": 2025,
     "target_year": 2030,
-    "scenarios": ["ND", "EP", "RE"],
-    "output_workspace": "outputs/plus"
+    "scenarios": ["ND", "UD", "EP", "RE"],
+    "output_workspace": "outputs/plus",
+    "resource_extraction": {
+      "core_driver": "subsidence_depth",
+      "core_driver_input": "inputs.subsidence_depth_raster",
+      "core_driver_unit": "m",
+      "core_driver_convention": "positive_down",
+      "requires_master_grid_alignment": true,
+      "additional_driver_factors": ["dem", "slope", "road_distance", "mine_distance"],
+      "water_susceptibility": null,
+      "w_dat_preprocessing": {
+        "source_unit": null,
+        "source_convention": null,
+        "output_depth_unit": "m",
+        "output_depth_convention": "positive_down"
+      }
+    }
   },
   "invest": {
     "enabled": true,
