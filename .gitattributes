@@ -1,0 +1,6 @@
+# Trained model artifacts are byte-sensitive.  Keep Git from applying
+# platform line-ending conversion before their SHA-256 contract is checked.
+*.pt binary
+*.pt2 binary
+*.pth binary
+*.onnx binary
