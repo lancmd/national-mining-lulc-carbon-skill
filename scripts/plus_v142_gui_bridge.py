@@ -588,7 +588,13 @@ def output_validation(expected: Path, reference: str | None) -> dict[str, Any]:
 
 def stable_output(expected: Path) -> bool:
     seconds = max(0.0, float(os.getenv("MINING_PLUS_OUTPUT_STABLE_SECONDS", "5")))
-    return expected.is_file() and expected.stat().st_size > 8 and time.time() - expected.stat().st_mtime >= seconds
+    if not expected.is_file() or expected.stat().st_size <= 8:
+        return False
+    # See plus_backend.adopt_existing_output: Windows can round mtime forward
+    # relative to the process clock, so an apparent negative age is treated as
+    # zero rather than incorrectly rejecting a zero-second stability request.
+    apparent_age = max(0.0, time.time() - expected.stat().st_mtime)
+    return apparent_age >= seconds
 
 
 def initial_state(scenario: str, expected: Path, identity: dict[str, Any], profile_file: Path | None,
