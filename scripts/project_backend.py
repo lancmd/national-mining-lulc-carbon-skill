@@ -34,7 +34,10 @@ def main() -> int:
                                params["imagery_periods"], params["driver_factors"], params["mine_boundary"],
                                params["carbon_density"], w_dat=params.get("w_dat"), model_package=params.get("model_package"),
                                training_roi=params.get("training_roi"), scheme=params.get("scheme", "high_water_coal_7class"),
-                               w_dat_unit=params.get("w_dat_unit"), w_dat_convention=params.get("w_dat_convention"))
+                               w_dat_unit=params.get("w_dat_unit"), w_dat_convention=params.get("w_dat_convention"),
+                               workface_boundary=params.get("workface_boundary"),
+                               w_dat_max_distance_m=params.get("w_dat_max_distance_m", 300.0),
+                               subsidence_depth_raster=params.get("subsidence_depth_raster"))
         result = {"status": "pending_validation" if report["pending_inputs"] else "completed", "result": report,
                   "outputs": [report["project_file"]]}
     elif envelope.get("operation") == "project.validate":
@@ -55,7 +58,7 @@ def main() -> int:
         return_code = runner.run()
         state = json.loads(runner.state_path.read_text(encoding="utf-8")) if runner.state_path.exists() else {"stages": {}}
         statuses = {item.get("status") for item in state.get("stages", {}).values()}
-        status = "failed" if return_code else "pending_validation" if "pending_validation" in statuses else "prepared" if "prepared" in statuses else "waiting_interactive" if "waiting_interactive" in statuses else "completed"
+        status = "failed" if return_code else "waiting_interactive" if "waiting_interactive" in statuses else "prepared" if "prepared" in statuses else "pending_validation" if "pending_validation" in statuses else "completed"
         result = {"status": status, "result": {"compiled": compiled, "state": str(runner.state_path), "stage_statuses": state.get("stages", {})},
                   "outputs": [compiled["workflow_job"], str(runner.state_path)]}
     elif envelope.get("operation") == "project.prepare_plus_scenarios":

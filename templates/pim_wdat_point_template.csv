@@ -1,4 +1,0 @@
-point_id,X,Y,W,W_unit,sign_convention,forecast_year,workface_id,scenario_id,source_note
-P001,385000,3712000,-0.035,m,negative_is_subsidence,2030,WF01,PIM_A,example_only
-P002,385030,3712000,-0.082,m,negative_is_subsidence,2030,WF01,PIM_A,example_only
-P003,385060,3712000,-0.120,m,negative_is_subsidence,2030,WF01,PIM_A,example_only

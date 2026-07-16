@@ -186,7 +186,9 @@ def status(job_id: str) -> dict[str, Any]:
         record["status"] = "running"
     elif record.get("status") == "running":
         stage_states = {value.get("status") for value in stages.values()}
-        record["status"] = "failed" if "failed" in stage_states else "waiting_interactive" if "waiting_interactive" in stage_states else "completed"
+        record["status"] = ("failed" if "failed" in stage_states else "waiting_interactive" if "waiting_interactive" in stage_states
+                            else "prepared" if "prepared" in stage_states else "pending_validation" if "pending_validation" in stage_states
+                            else "completed")
         record["finished_at"] = now()
         release_lock(record)
     if Path(record["log"]).is_file():

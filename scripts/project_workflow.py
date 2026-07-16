@@ -12,6 +12,7 @@ from typing import Any
 from path_safety import PathSafetyError, require_within, resolved, resolve_output
 from plus_contract import canonical_re_contract, expected_plus_raster
 from project_validator import validate
+from spatial_contract import parse_driver_factors
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,9 +24,9 @@ INVEST_MODELS = {
     "habitat_quality": {"cli": "habitat_quality", "lulc_argument": "lulc_cur_path", "default_output": None,
                         "service_field": "habitat_quality", "service_aggregation": "mean"},
     "sediment_delivery_ratio": {"cli": "sdr", "lulc_argument": "lulc_path", "default_output": None,
-                                  "service_field": "sediment_retention"},
+                                  "service_field": "sediment_retention", "service_aggregation": "sum"},
     "nutrient_delivery_ratio": {"cli": "ndr", "lulc_argument": "lulc_path", "default_output": None,
-                                  "service_field": "nutrient_retention"},
+                                  "service_field": "nutrient_retention", "service_aggregation": "sum"},
 }
 
 
@@ -115,6 +116,15 @@ def configured_imagery_periods(inputs: dict[str, Any], base: Path) -> list[tuple
     return [(index + 1, source_path(str(value), base) or "") for index, value in enumerate(inputs.get("imagery", [])) if value]
 
 
+def configured_lulc_periods(inputs: dict[str, Any], base: Path) -> list[tuple[int, str]]:
+    """Read dated supplied LULC products while retaining legacy list support."""
+    periods = inputs.get("historical_lulc_periods")
+    if isinstance(periods, list) and periods:
+        return [(int(item["year"]), source_path(str(item["path"]), base) or "") for item in periods]
+    return [(index + 1, source_path(str(value), base) or "")
+            for index, value in enumerate(inputs.get("historical_lulc", [])) if value]
+
+
 def templated_output(value: str | None, default: str, year: int, workspace: Path, multi: bool) -> str:
     """Keep a legacy single-date output stable and make multi-date outputs unique."""
     if value and "{year}" in value:
@@ -164,12 +174,13 @@ def add_preflight(stages: list[dict[str, Any]], workspace: Path, inputs: dict[st
         for year, image in periods[:-1]:
             datasets.append({"name": f"imagery_{year}", "path": image, "kind": "continuous", "must_align": False})
     if plus.get("enabled"):
-        for name, value in inputs.get("driver_factors", {}).items():
-            if value:
+        for name, entry in parse_driver_factors(inputs.get("driver_factors", {})).items():
+            if entry:
                 # Raw factors may legitimately use another CRS/resolution.
                 # A later ArcGIS stage creates the aligned working copies and
                 # a second preflight verifies those copies before PLUS.
-                datasets.append({"name": f"driver_{name}", "path": source_path(value, base), "kind": "continuous",
+                datasets.append({"name": f"driver_{name}", "path": source_path(entry["path"], base),
+                                 "kind": "continuous" if entry["type"] != "categorical" else "categorical",
                                  "must_align": False})
         if inputs.get("subsidence_depth_raster"):
             datasets.append({"name": "subsidence_depth", "path": source_path(inputs["subsidence_depth_raster"], base),
@@ -226,7 +237,7 @@ def historical_lulc_validation_stage(stages: list[dict[str, Any]], identifier: s
     """Assert all dated LULC products are pixel-identical before PLUS/Sankey."""
     latest_year, latest = history[-1]
     datasets = [{"name": f"lulc_{year}", "path": path, "kind": "lulc", "allowed_codes": allowed_codes(scheme),
-                 "must_align": True} for year, path in history]
+                 "must_align": True, "expected_cell_size_m": 30} for year, path in history]
     datasets[-1]["name"] = "master_lulc"
     spec = {"master": "master_lulc", "datasets": datasets, "carbon_density": carbon}
     spec_path = workspace / "generated" / f"{identifier}.json"; report = workspace / "validation" / f"{identifier}.json"
@@ -339,19 +350,32 @@ def compile_workflow(project_path: Path, output_job: Path | None = None) -> dict
                                workspace, [validation_id])
                 raw_history.append((year, lulc_output, validation_id))
             latest_year, latest_lulc, latest_validation = raw_history[-1]
-            lulc, lulc_dependency = latest_lulc, [latest_validation]
-            lulc_history = [(latest_year, latest_lulc)]
-            alignment_dependencies: list[str] = [latest_validation]
+            # The analysis grid is intentionally fixed at 30 m even if the
+            # classifier receives 10 m Sentinel imagery.  Categorical data is
+            # reduced by modal (majority) aggregation, never by interpolation.
+            master_lulc = str(workspace / "intermediate" / "master_lulc_30m.tif")
+            stages.append({"id": "analysis_master_grid", "adapter": "command", "enabled": True,
+                           "command": [sys.executable, str(ROOT / "scripts" / "raster_grid.py"), "--input", latest_lulc,
+                                       "--output", master_lulc, "--cell-size-m", "30", "--kind", "categorical", "--resampling", "majority"],
+                           "inputs": [latest_lulc], "outputs": [master_lulc, master_lulc + ".metadata.json"],
+                           "depends_on": [latest_validation]})
+            lulc, lulc_dependency = master_lulc, ["analysis_master_grid"]
+            latest_aligned = output_path(f"outputs/lulc/aligned/LULC_{latest_year}.tif", workspace)
+            stages.append({"id": f"align_lulc_{latest_year}", "adapter": "command", "enabled": True,
+                           "command": [sys.executable, str(ROOT / "scripts" / "raster_grid.py"), "--input", master_lulc,
+                                       "--master", master_lulc, "--output", latest_aligned, "--kind", "categorical", "--resampling", "majority"],
+                           "inputs": [master_lulc], "outputs": [latest_aligned, latest_aligned + ".metadata.json"],
+                           "depends_on": ["analysis_master_grid"]})
+            lulc, lulc_history = latest_aligned, [(latest_year, latest_aligned)]
+            alignment_dependencies: list[str] = [f"align_lulc_{latest_year}"]
             for year, raw_lulc, validation_id in raw_history[:-1]:
                 aligned = output_path(f"outputs/lulc/aligned/LULC_{year}.tif", workspace)
-                spec_path = workspace / "generated" / f"align_lulc_{year}.json"
-                write_json(spec_path, {"environment": {"overwriteOutput": False}, "operations": [{
-                    "id": f"align_lulc_{year}", "type": "align_raster", "input": raw_lulc, "master": latest_lulc,
-                    "output": aligned, "resampling": "NEAREST", "mask": source_path(inputs.get("mine_boundary"), base)}]})
                 align_id = f"align_lulc_{year}"
-                stages.append({"id": align_id, "adapter": "arcgis", "enabled": True, "spec": str(spec_path),
-                               "inputs": [raw_lulc, latest_lulc] + ([source_path(inputs["mine_boundary"], base)] if inputs.get("mine_boundary") else []),
-                               "outputs": [aligned], "depends_on": [validation_id, latest_validation]})
+                stages.append({"id": align_id, "adapter": "command", "enabled": True,
+                               "command": [sys.executable, str(ROOT / "scripts" / "raster_grid.py"), "--input", raw_lulc,
+                                           "--master", master_lulc, "--output", aligned, "--kind", "categorical", "--resampling", "majority"],
+                               "inputs": [raw_lulc, master_lulc], "outputs": [aligned, aligned + ".metadata.json"],
+                               "depends_on": [validation_id, "analysis_master_grid"]})
                 lulc_history.insert(0, (year, aligned)); alignment_dependencies.append(align_id)
             if multi:
                 history_validation = historical_lulc_validation_stage(stages, "historical_lulc_preflight", lulc_history,
@@ -376,12 +400,46 @@ def compile_workflow(project_path: Path, output_job: Path | None = None) -> dict
                            "depends_on": lulc_dependency.copy()})
             lulc_dependency.append("lulc_accuracy")
 
+    # Convert raw LULC products to the common 30 m analysis grid.  This covers
+    # supplied historical maps as well as maps produced by a classifier above.
+    provided_history = configured_lulc_periods(inputs, base)
+    raw_history = lulc_history or provided_history
+    if not raw_history and lulc:
+        raw_history = [(int(plus.get("baseline_year", 0) or 0), lulc)]
+    if raw_history and not any(stage["id"] == "analysis_master_grid" for stage in stages):
+        latest_year, latest_source = raw_history[-1]
+        master_lulc = str(workspace / "intermediate" / "master_lulc_30m.tif")
+        stages.append({"id": "analysis_master_grid", "adapter": "command", "enabled": True,
+                       "command": [sys.executable, str(ROOT / "scripts" / "raster_grid.py"), "--input", latest_source,
+                                   "--output", master_lulc, "--cell-size-m", "30", "--kind", "categorical", "--resampling", "majority"],
+                       "inputs": [latest_source], "outputs": [master_lulc, master_lulc + ".metadata.json"],
+                       "depends_on": lulc_dependency.copy()})
+        lulc_history = []
+        alignment_ids: list[str] = []
+        for year, raw in raw_history:
+            aligned = output_path(f"outputs/lulc/aligned/LULC_{year}.tif", workspace)
+            stage_id = f"align_lulc_{year}"
+            stages.append({"id": stage_id, "adapter": "command", "enabled": True,
+                           "command": [sys.executable, str(ROOT / "scripts" / "raster_grid.py"), "--input", raw,
+                                       "--master", master_lulc, "--output", aligned, "--kind", "categorical", "--resampling", "majority"],
+                           "inputs": [raw, master_lulc], "outputs": [aligned, aligned + ".metadata.json"],
+                           "depends_on": ["analysis_master_grid"]})
+            lulc_history.append((year, aligned)); alignment_ids.append(stage_id)
+        lulc, lulc_dependency = lulc_history[-1][1], alignment_ids[-1:]
+        if len(lulc_history) >= 2:
+            history_validation = historical_lulc_validation_stage(stages, "historical_lulc_preflight", lulc_history,
+                                                                   classification.get("scheme", "standard_6class"), carbon,
+                                                                   workspace, alignment_ids)
+            lulc_dependency = [history_validation]
+            add_transition_sankeys(stages, lulc_history, classification.get("scheme", "standard_6class"), workspace,
+                                   [history_validation])
+
     # Convert raw drivers and the PIM depth product into exact working copies
     # on the final LULC grid before PLUS or water-volume analysis begins.
-    provided_history = [(index + 1, source_path(value, base) or "") for index, value in enumerate(inputs.get("historical_lulc", [])) if value]
-    plus_history = lulc_history if len(lulc_history) >= 2 else provided_history
-    master_lulc = plus_history[-1][1] if plus_history else lulc
-    prepared_drivers: dict[str, str] = {name: source_path(value, base) or "" for name, value in inputs.get("driver_factors", {}).items() if value}
+    plus_history = lulc_history if len(lulc_history) >= 2 else (configured_lulc_periods(inputs, base) if len(configured_lulc_periods(inputs, base)) >= 2 else [])
+    master_lulc = lulc_history[-1][1] if lulc_history else lulc
+    driver_entries = parse_driver_factors(inputs.get("driver_factors", {}))
+    prepared_drivers: dict[str, str] = {name: source_path(entry["path"], base) or "" for name, entry in driver_entries.items()}
     prepared_dependencies = lulc_dependency.copy() if lulc_dependency else dependencies.copy()
     subsidence_depth = source_path(inputs.get("subsidence_depth_raster"), base)
     if master_lulc and (plus.get("enabled") or subsidence.get("enabled")):
@@ -398,16 +456,19 @@ def compile_workflow(project_path: Path, output_job: Path | None = None) -> dict
             stages.append({"id": terrain_stage, "adapter": "arcgis", "enabled": True, "spec": str(terrain_spec),
                            "inputs": [dem_source], "outputs": [raw_slope, raw_aspect], "depends_on": dependencies.copy()})
             prepared_drivers.setdefault("slope", raw_slope); prepared_drivers.setdefault("aspect", raw_aspect)
+            driver_entries.setdefault("slope", {"path": raw_slope, "type": "continuous", "resampling": "bilinear"})
+            driver_entries.setdefault("aspect", {"path": raw_aspect, "type": "circular", "resampling": "nearest"})
         aligned_stages: list[str] = []
         for name, raw in list(prepared_drivers.items()):
             aligned = str(workspace / "outputs" / "drivers" / f"{name}_aligned.tif")
-            spec_path = workspace / "generated" / f"align_driver_{name}.json"
-            write_json(spec_path, {"environment": {"overwriteOutput": False}, "operations": [{"id": f"align_driver_{name}", "type": "align_raster",
-                        "input": raw, "master": master_lulc, "output": aligned, "resampling": "BILINEAR", "mask": mask}]})
             stage_id = f"align_driver_{name}"
             deps = prepared_dependencies.copy() + ([terrain_stage] if terrain_stage and name in {"slope", "aspect"} else [])
-            stages.append({"id": stage_id, "adapter": "arcgis", "enabled": True, "spec": str(spec_path),
-                           "inputs": [raw, master_lulc] + ([mask] if mask else []), "outputs": [aligned], "depends_on": deps})
+            policy = driver_entries.get(name, {"type": "continuous", "resampling": "bilinear"})
+            stages.append({"id": stage_id, "adapter": "command", "enabled": True,
+                           "command": [sys.executable, str(ROOT / "scripts" / "raster_grid.py"), "--input", raw,
+                                       "--master", master_lulc, "--output", aligned, "--kind", policy["type"],
+                                       "--resampling", policy["resampling"]],
+                           "inputs": [raw, master_lulc], "outputs": [aligned, aligned + ".metadata.json"], "depends_on": deps})
             prepared_drivers[name] = aligned; aligned_stages.append(stage_id)
         if inputs.get("subsidence_w_dat"):
             source = plus.get("resource_extraction", {}).get("w_dat_preprocessing", {})
@@ -416,21 +477,29 @@ def compile_workflow(project_path: Path, output_job: Path | None = None) -> dict
                            "command": [sys.executable, str(ROOT / "scripts" / "wdat_to_depth.py"), "--input", source_path(inputs["subsidence_w_dat"], base),
                                        "--output", points, "--unit", str(source.get("source_unit", "m")), "--sign", str(source.get("source_convention", "positive_down"))],
                            "inputs": [source_path(inputs["subsidence_w_dat"], base)], "outputs": [points], "depends_on": prepared_dependencies.copy()})
+            wdat = plus.get("resource_extraction", {}).get("w_dat_preprocessing", {})
+            scope = source_path(wdat.get("scope_vector") or inputs.get("workface_boundary"), base)
+            maximum = wdat.get("max_interpolation_distance_m")
+            rasterise_command = [sys.executable, str(ROOT / "scripts" / "wdat_rasterize.py"), "--points", points,
+                                 "--master", master_lulc, "--output", depth]
+            if wdat.get("interpolation", "nearest_within_scope") != "none":
+                rasterise_command += ["--fill-nearest", "--scope-vector", str(scope), "--max-distance-m", str(maximum)]
             stages.append({"id": "rasterise_w_dat", "adapter": "command", "enabled": True,
-                           "command": [sys.executable, str(ROOT / "scripts" / "wdat_rasterize.py"), "--points", points, "--master", master_lulc, "--output", depth, "--fill-nearest"],
-                           "inputs": [points, master_lulc], "outputs": [depth, depth + ".metadata.json"], "depends_on": ["standardise_w_dat"]})
+                           "command": rasterise_command, "inputs": [points, master_lulc] + ([str(scope)] if scope else []),
+                           "outputs": [depth, depth + ".metadata.json"], "depends_on": ["standardise_w_dat"]})
             subsidence_depth = depth; aligned_stages.append("rasterise_w_dat")
         elif subsidence_depth:
             depth = str(workspace / "outputs" / "subsidence" / "subsidence_depth_aligned.tif")
-            spec_path = workspace / "generated" / "align_subsidence_depth.json"
-            write_json(spec_path, {"environment": {"overwriteOutput": False}, "operations": [{"id": "align_subsidence_depth", "type": "align_raster",
-                        "input": subsidence_depth, "master": master_lulc, "output": depth, "resampling": "BILINEAR", "mask": mask}]})
-            stages.append({"id": "align_subsidence_depth", "adapter": "arcgis", "enabled": True, "spec": str(spec_path),
-                           "inputs": [subsidence_depth, master_lulc] + ([mask] if mask else []), "outputs": [depth], "depends_on": prepared_dependencies.copy()})
+            stages.append({"id": "align_subsidence_depth", "adapter": "command", "enabled": True,
+                           "command": [sys.executable, str(ROOT / "scripts" / "raster_grid.py"), "--input", subsidence_depth,
+                                       "--master", master_lulc, "--output", depth, "--kind", "continuous", "--resampling", "bilinear"],
+                           "inputs": [subsidence_depth, master_lulc], "outputs": [depth, depth + ".metadata.json"], "depends_on": prepared_dependencies.copy()})
             subsidence_depth = depth; aligned_stages.append("align_subsidence_depth")
         if plus.get("enabled") and plus_history:
-            dataset_entries = [{"name": "master_lulc", "path": master_lulc, "kind": "lulc", "allowed_codes": allowed_codes(classification.get("scheme", "standard_6class")), "must_align": False}]
-            dataset_entries += [{"name": f"driver_{name}", "path": path, "kind": "continuous", "must_align": True} for name, path in prepared_drivers.items()]
+            dataset_entries = [{"name": "master_lulc", "path": master_lulc, "kind": "lulc", "allowed_codes": allowed_codes(classification.get("scheme", "standard_6class")), "must_align": False, "expected_cell_size_m": 30}]
+            dataset_entries += [{"name": f"driver_{name}", "path": path,
+                                 "kind": "continuous" if driver_entries.get(name, {}).get("type") != "categorical" else "categorical",
+                                 "must_align": True, "expected_cell_size_m": 30} for name, path in prepared_drivers.items()]
             if subsidence_depth:
                 dataset_entries.append({"name": "subsidence_depth", "path": subsidence_depth, "kind": "subsidence_depth", "must_align": True})
             spec_path, report_path = workspace / "generated" / "plus_input_preflight.json", workspace / "validation" / "plus_input_preflight.json"
@@ -440,6 +509,13 @@ def compile_workflow(project_path: Path, output_job: Path | None = None) -> dict
                            "inputs": [master_lulc, *prepared_drivers.values()] + ([subsidence_depth] if subsidence_depth else []), "outputs": [str(report_path)],
                            "depends_on": aligned_stages or prepared_dependencies.copy()})
             prepared_dependencies = ["plus_input_preflight"]
+
+    if subsidence.get("enabled") and subsidence.get("mode") == "classify_only":
+        evidence = str(workspace / "validation" / "subsidence_water_classification.json")
+        stages.append({"id": "subsidence_water_classification_evidence", "adapter": "command", "enabled": True,
+                       "command": [sys.executable, str(ROOT / "scripts" / "subsidence_water_evidence.py"), "--lulc", lulc,
+                                   "--water-code", str(subsidence.get("water_code", 1)), "--output", evidence],
+                       "inputs": [lulc], "outputs": [evidence], "depends_on": lulc_dependency.copy()})
 
     if subsidence.get("enabled") and subsidence.get("mode") in {"estimate_volume", "composite_subsidence_water_carbon"}:
         mode = subsidence["mode"]
@@ -517,14 +593,19 @@ def compile_workflow(project_path: Path, output_job: Path | None = None) -> dict
     invest_service_outputs: dict[str, dict[str, str]] = {}
     invest_dependencies: list[str] = []
     if invest.get("enabled"):
-        if plus_outputs:
-            lulc_sources = plus_outputs
-            dependency_by_scenario = {scenario: [f"plus_output_validation_{scenario}"] for scenario in plus_outputs}
-        else:
+        # Carbon and other InVEST models run for every dated historical LULC,
+        # then for every completed PLUS scenario.  Historical products remain
+        # available even when PLUS is disabled or paused for GUI handoff.
+        historical_sources = {str(year): path for year, path in lulc_history} if len(lulc_history) >= 2 else {}
+        if not historical_sources:
             if not lulc:
                 raise ValueError("InVEST needs a classified or provided LULC raster")
-            lulc_sources = {"baseline": lulc}
-            dependency_by_scenario = {"baseline": lulc_dependency}
+            historical_sources = {"baseline": lulc}
+        lulc_sources = dict(historical_sources)
+        dependency_by_scenario = {scenario: lulc_dependency.copy() for scenario in historical_sources}
+        for scenario, path in plus_outputs.items():
+            lulc_sources[scenario] = path
+            dependency_by_scenario[scenario] = [f"plus_output_validation_{scenario}"]
         for model, model_config in enabled_invest_models(invest).items():
             for scenario, source_lulc in lulc_sources.items():
                 suffix = "" if scenario == "baseline" else f"_{scenario}"
@@ -539,7 +620,7 @@ def compile_workflow(project_path: Path, output_job: Path | None = None) -> dict
                     raise ValueError(f"invest.models.{model}.expected_outputs must be a list of non-empty relative paths")
                 outputs = [str((model_workspace / item).resolve()) for item in configured_outputs]
                 model_dependencies = dependency_by_scenario[scenario]
-                if model in {"annual_water_yield", "habitat_quality"}:
+                if model != "carbon":
                     contract = str(workspace / "validation" / f"{stage_id}_input_contract.json")
                     contract_id = f"{stage_id}_input_contract"
                     stages.append({"id": contract_id, "adapter": "command", "enabled": True,
@@ -585,6 +666,8 @@ def compile_workflow(project_path: Path, output_job: Path | None = None) -> dict
             else:
                 geometry = None
             for scenario, service_outputs in invest_service_outputs.items():
+                if scenario not in plus_outputs:
+                    continue
                 for field, raster in service_outputs.items():
                     command.extend(["--service-raster", f"{scenario}={field}={raster}"])
             for model, model_config in enabled_invest_models(invest).items():
@@ -592,8 +675,10 @@ def compile_workflow(project_path: Path, output_job: Path | None = None) -> dict
                 if model_config.get("service_unit"):
                     command.extend(["--service-unit", f"{field}={model_config['service_unit']}"])
                 command.extend(["--service-aggregation", f"{field}={model_config.get('service_aggregation', INVEST_MODELS[model].get('service_aggregation', 'sum'))}"])
+            service_inputs = [raster for scenario, services in invest_service_outputs.items() if scenario in plus_outputs
+                              for raster in services.values()]
             stages.append({"id": "ecosystem_scenario_inputs", "adapter": "command", "enabled": True, "command": command,
-                           "inputs": list(invest_outputs.values()) + ([source_path(ecosystem["criteria_table"], base)] if ecosystem.get("criteria_table") else []),
+                           "inputs": service_inputs + ([source_path(ecosystem["criteria_table"], base)] if ecosystem.get("criteria_table") else []),
                            "outputs": [item for item in [criteria, criteria + ".metadata.json", geometry] if item], "depends_on": invest_dependencies.copy()})
             ecosystem_dependencies = ["ecosystem_scenario_inputs"]
         else:
@@ -628,12 +713,28 @@ def compile_workflow(project_path: Path, output_job: Path | None = None) -> dict
                 "depends_on": ["ecosystem_service"]})
         geo_fields = analysis.get("geodetector_factor_fields", [])
         geo_table = source_path(analysis.get("geodetector_samples"), base)
+        geodetector_dependencies = ["ecosystem_service"]
+        if geo_fields and not geo_table and analysis.get("geodetector_target_raster") and analysis.get("geodetector_factor_rasters"):
+            geo_table = output_path(analysis.get("geodetector_samples_output", "outputs/ecosystem/geodetector_samples.csv"), workspace)
+            target_raster = source_path(analysis["geodetector_target_raster"], base)
+            sample_command = [sys.executable, str(ROOT / "scripts" / "geodetector_spatial_samples.py"), "--target", target_raster,
+                              "--target-field", analysis.get("geodetector_target_field", "ecosystem_service_score"), "--output", geo_table,
+                              "--sample-step", str(analysis.get("geodetector_sample_step", 1)),
+                              "--continuous-bins", str(analysis.get("geodetector_continuous_bins", 6))]
+            sample_inputs = [target_raster]
+            for name in geo_fields:
+                raster = source_path(analysis["geodetector_factor_rasters"].get(name), base)
+                sample_command.extend(["--factor", f"{name}={raster}"]); sample_inputs.append(raster)
+            stages.append({"id": "ecosystem_geodetector_samples", "adapter": "command", "enabled": True,
+                           "command": sample_command, "inputs": sample_inputs, "outputs": [geo_table, geo_table + ".metadata.json"],
+                           "depends_on": ["ecosystem_service"]})
+            geodetector_dependencies = ["ecosystem_geodetector_samples"]
         if geo_fields and geo_table:
             out = output_path(analysis.get("geodetector_output", "outputs/ecosystem/geodetector.csv"), workspace)
             stages.append({"id": "ecosystem_geodetector", "adapter": "command", "enabled": True,
                 "command": [sys.executable, str(ROOT / "scripts" / "ecosystem_analysis.py"), "geodetector", "--table", geo_table,
                             "--target", analysis.get("geodetector_target_field", "ecosystem_service_score"), "--fields", ",".join(geo_fields), "--output", out],
-                "inputs": [geo_table], "outputs": [out], "depends_on": ["ecosystem_service"]})
+                "inputs": [geo_table], "outputs": [out], "depends_on": geodetector_dependencies})
 
     completed = [stage["id"] for stage in stages if stage.get("enabled")]
     if gis_outputs.get("enabled"):

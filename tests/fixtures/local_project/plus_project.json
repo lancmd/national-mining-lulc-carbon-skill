@@ -18,7 +18,7 @@
     "dem": null,
     "water_surface_elevation_m": null,
     "subsidence_depth_raster": "subsidence_depth_aligned.tif",
-    "subsidence_w_dat": "external_w.dat",
+    "subsidence_w_dat": null,
     "workface_boundary": "workface.gpkg",
     "driver_factors": {
       "dem": "driver_dem.tif",
@@ -50,7 +50,8 @@
         "source_unit": "mm",
         "source_convention": "negative_down",
         "output_depth_unit": "m",
-        "output_depth_convention": "positive_down"
+        "output_depth_convention": "positive_down",
+        "max_interpolation_distance_m": 300
       }
     }
   },

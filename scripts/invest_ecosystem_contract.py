@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate local InVEST Annual Water Yield and Habitat Quality datastacks."""
+"""Validate local non-Carbon InVEST datastacks before scenario execution."""
 
 from __future__ import annotations
 
@@ -14,6 +14,8 @@ REQUIRED: dict[str, tuple[str, ...]] = {
     "annual_water_yield": ("lulc_path", "precipitation_path", "eto_path", "depth_to_root_rest_layer_path", "pawc_path",
                             "watersheds_path", "biophysical_table_path", "seasonality_constant"),
     "habitat_quality": ("lulc_cur_path", "threats_table_path", "sensitivity_table_path", "half_saturation_constant"),
+    "sediment_delivery_ratio": ("lulc_path", "dem_path", "erosivity_path", "erodibility_path", "watersheds_path", "biophysical_table_path"),
+    "nutrient_delivery_ratio": ("lulc_path", "dem_path", "runoff_proxy_path", "watersheds_path", "biophysical_table_path"),
 }
 
 
@@ -33,6 +35,12 @@ def headers(path: Path) -> set[str]:
         return set(csv.DictReader(stream).fieldnames or [])
 
 
+def missing_headers(actual: set[str], required: set[str]) -> set[str]:
+    """Compare InVEST table headers case-insensitively without rewriting them."""
+    present = {value.casefold() for value in actual}
+    return {value for value in required if value.casefold() not in present}
+
+
 def validate(model: str, datastack: Path) -> dict[str, Any]:
     payload = read(datastack); args = payload.get("args", {})
     if not isinstance(args, dict):
@@ -46,13 +54,13 @@ def validate(model: str, datastack: Path) -> dict[str, Any]:
             path = resolve(value, datastack.parent)
             if path is None or not path.exists():
                 errors.append(f"input does not exist: {name} = {path}")
-    numeric = "seasonality_constant" if model == "annual_water_yield" else "half_saturation_constant"
-    if args.get(numeric) not in (None, "") and (not isinstance(args[numeric], (int, float)) or float(args[numeric]) <= 0):
+    numeric = "seasonality_constant" if model == "annual_water_yield" else "half_saturation_constant" if model == "habitat_quality" else None
+    if numeric and args.get(numeric) not in (None, "") and (not isinstance(args[numeric], (int, float)) or float(args[numeric]) <= 0):
         errors.append(f"{numeric} must be a positive number")
     try:
         if model == "annual_water_yield" and args.get("biophysical_table_path"):
             table = resolve(args["biophysical_table_path"], datastack.parent)
-            missing = {"lucode", "root_depth", "kc"} - headers(table) if table else {"table"}
+            missing = missing_headers(headers(table), {"lucode", "root_depth", "kc", "lulc_veg"}) if table else {"table"}
             if missing: errors.append("Annual Water Yield biophysical table misses: " + ", ".join(sorted(missing)))
         if model == "habitat_quality":
             threats = resolve(args.get("threats_table_path"), datastack.parent)
@@ -60,11 +68,11 @@ def validate(model: str, datastack: Path) -> dict[str, Any]:
             threat_headers = headers(threats) if threats else set(); sensitivity_headers = headers(sensitivity) if sensitivity else set()
             missing_threat = {"threat", "max_dist", "weight", "decay", "cur_path"} - threat_headers
             if missing_threat: errors.append("Habitat Quality threats table misses: " + ", ".join(sorted(missing_threat)))
-            missing_sensitivity = {"lucode", "habitat"} - sensitivity_headers
+            # InVEST Habitat Quality uses the field name ``lulc`` rather than
+            # Carbon's ``lucode``.  Treating them as interchangeable lets an
+            # invalid table pass preflight and fail only after a costly run.
+            missing_sensitivity = missing_headers(sensitivity_headers, {"lulc", "habitat"})
             if missing_sensitivity: errors.append("Habitat Quality sensitivity table misses: " + ", ".join(sorted(missing_sensitivity)))
-            for threat in threat_headers & sensitivity_headers:
-                if threat not in {"lucode", "habitat"}:
-                    continue
             if threats and threat_headers and sensitivity_headers:
                 with threats.open(encoding="utf-8-sig", newline="") as stream:
                     rows = list(csv.DictReader(stream))
@@ -78,6 +86,11 @@ def validate(model: str, datastack: Path) -> dict[str, Any]:
                         errors.append(f"Habitat Quality threat raster does not exist for {name or 'unnamed'}: {raster}")
             if not args.get("access_vector_path"):
                 warnings.append("access_vector_path is absent; habitat access is treated as unrestricted")
+        if model in {"sediment_delivery_ratio", "nutrient_delivery_ratio"} and args.get("biophysical_table_path"):
+            table = resolve(args["biophysical_table_path"], datastack.parent)
+            missing = missing_headers(headers(table), {"lucode"}) if table else {"table"}
+            if missing:
+                errors.append(f"{model} biophysical table misses: " + ", ".join(sorted(missing)))
     except (OSError, csv.Error) as error:
         errors.append(f"cannot read InVEST parameter table: {error}")
     return {"status": "completed" if not errors else "failed", "model": model, "datastack": str(datastack.resolve()),

@@ -16,7 +16,7 @@ Annual Water Yield datastack 至少要包含：
 - `depth_to_root_rest_layer_path`：根系限制层深度 GeoTIFF，mm；
 - `pawc_path`：植物可利用含水量 GeoTIFF，0–1；
 - `watersheds_path`：流域/汇水区矢量；
-- `biophysical_table_path`：至少含 `lucode`、`root_depth`、`kc`；
+- `biophysical_table_path`：至少含 `lucode`、`root_depth`、`Kc` 和 `lulc_veg`；
 - `seasonality_constant`：经校准或有明确依据的正数 Z。
 
 同一年内，降水、ET0、LULC、土壤层和流域应统一到同一投影、范围、像元网格。若水文计算涉及面积或体积，使用米制投影坐标系。
@@ -30,7 +30,7 @@ Habitat Quality datastack 至少要包含：
 - `lulc_cur_path`：本工作流生成的 LULC；
 - `threats_table_path`：至少含 `threat`、`max_dist`、`weight`、`decay`、`cur_path`；
 - 每个 `cur_path` 指向同一时期的威胁栅格，例如建设用地、道路、铁路、采场/排土场或夜间灯光；
-- `sensitivity_table_path`：至少含 `lucode`、`habitat`，并为 threats 表每个威胁提供敏感性列；
+- `sensitivity_table_path`：至少含 `lulc`、`habitat`，并为 threats 表每个威胁提供敏感性列；
 - `half_saturation_constant`：有明确生态学依据的正数；
 - 可选 `access_vector_path`：保护地或可达性修正面。
 

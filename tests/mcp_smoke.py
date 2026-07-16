@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import json
 import os
 import sys
@@ -141,7 +142,7 @@ async def run() -> None:
             end_to_end["ecosystem_method"] = ecosystem["result"]["method"]
             runtime_package = ROOT / "outputs" / "pytorch_smoke" / "model_package"
             runtime_input = ROOT / "outputs" / "pytorch_smoke" / "input.tif"
-            if runtime_package.exists() and runtime_input.exists():
+            if runtime_package.exists() and runtime_input.exists() and importlib.util.find_spec("torch"):
                 torch_result = await session.call_tool("run_pytorch_lulc", {
                     "model_package": str(runtime_package), "input_raster": str(runtime_input),
                     "class_output": str(ROOT / "outputs" / "pytorch_smoke" / "mcp_lulc.tif"),
@@ -161,7 +162,7 @@ async def run() -> None:
                 end_to_end["arcgis_crs"] = inspected["result"]["factory_code"]
             datastack = ROOT / "tests" / "invest_carbon_smoke_datastack.json"
             if datastack.exists() and raster.exists() and invest_capability["result"].get("available"):
-                invest_workspace = ROOT / "outputs" / "mcp_invest_smoke"
+                invest_workspace = ROOT / "outputs" / "mcp" / "invest_smoke"
                 invest_result = await session.call_tool("run_invest_carbon", {
                     "datastack": str(datastack), "workspace": str(invest_workspace)
                 })

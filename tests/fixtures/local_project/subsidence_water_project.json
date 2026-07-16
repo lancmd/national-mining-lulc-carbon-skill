@@ -2,6 +2,10 @@
   "schema_version": 2,
   "project_id": "subsidence-water-4-3-smoke",
   "workspace": "../../../outputs/subsidence_water_contract_smoke",
+  "security": {
+    "input_roots": ["."],
+    "output_root": "../../../outputs"
+  },
   "inputs": {
     "imagery": ["imagery.tif"],
     "roi": "roi.gpkg",
@@ -13,7 +17,7 @@
     "dem": "driver_dem.tif",
     "water_surface_elevation_m": 0,
     "subsidence_depth_raster": "subsidence_depth_aligned.tif",
-    "subsidence_w_dat": "external_w.dat",
+    "subsidence_w_dat": null,
     "workface_boundary": null,
     "subsidence_water_boundary": "roi.gpkg",
     "aquatic_vegetation_boundary": "mine_boundary.gpkg",

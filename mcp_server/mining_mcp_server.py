@@ -31,7 +31,8 @@ INPUT_PATH_KEYS = {"path", "project_file", "project", "datastack", "model_packag
                    "workflow_raster", "independent_raster", "scores_table", "candidates_table", "sample_table", "samples_table",
                    "validation_file", "input", "inputs", "aprx", "symbology_layer", "dem", "subsidence_depth",
                    "water_boundary", "core_driver_input", "carbon_pools_path", "imagery", "historical_lulc", "lulc_baseline",
-                   "driver_factors", "mine_boundary", "roi", "training_roi", "subsidence_water_boundary"}
+                   "driver_factors", "mine_boundary", "roi", "training_roi", "subsidence_water_boundary",
+                   "carbon_density", "subsidence_depth_raster", "w_dat", "workface_boundary"}
 OUTPUT_PATH_KEYS = {"output", "output_job", "workspace", "class_output", "confidence_output", "low_confidence_output",
                     "output_raster", "output_report", "expected_output", "output_directory", "water_depth_output",
                     "volume_table", "carbon_table", "pdf", "png", "aprx_output", "validation_output", "model_workspace", "output_project"}
@@ -242,17 +243,26 @@ def validate_local_project(project_file: str, backend: str = "project") -> str:
 
 @mcp.tool()
 def build_local_project_from_inputs(output_project: str, project_id: str, workspace: str,
-                                    imagery_periods: list[dict[str, Any]], driver_factors: dict[str, str],
+                                    imagery_periods: list[dict[str, Any]], driver_factors: dict[str, Any],
                                     mine_boundary: str, carbon_density: str, w_dat: str | None = None,
                                     model_package: str | None = None, training_roi: str | None = None,
                                     scheme: str = "high_water_coal_7class", w_dat_unit: str | None = None,
-                                    w_dat_convention: str | None = None, backend: str = "project") -> str:
-    """Build a local multi-date project from supplied data paths; use a PyTorch model package or ENVI ROI for classification."""
+                                    w_dat_convention: str | None = None, workface_boundary: str | None = None,
+                                    w_dat_max_distance_m: float = 300.0, subsidence_depth_raster: str | None = None,
+                                    backend: str = "project") -> str:
+    """Build a local multi-date project from supplied paths.
+
+    Supply carbon_density.  For RE/subsidence use either a standardised
+    subsidence_depth_raster (the user-made settlement cloud) or w_dat with its
+    unit, sign convention and bounded interpolation scope; not both.
+    """
     return json_result(registry.call(backend, "project.build_from_inputs", {
         "output_project": output_project, "project_id": project_id, "workspace": workspace,
         "imagery_periods": imagery_periods, "driver_factors": driver_factors, "mine_boundary": mine_boundary,
         "carbon_density": carbon_density, "w_dat": w_dat, "model_package": model_package, "training_roi": training_roi,
         "scheme": scheme, "w_dat_unit": w_dat_unit, "w_dat_convention": w_dat_convention,
+        "workface_boundary": workface_boundary, "w_dat_max_distance_m": w_dat_max_distance_m,
+        "subsidence_depth_raster": subsidence_depth_raster,
     }))
 
 
@@ -358,6 +368,24 @@ def run_arcgis_operations(spec: dict[str, Any], workspace: str, confirm_overwrit
     return json_result(registry.call(backend, "arcgis.run_operations", {
         "spec": spec, "workspace": workspace, "confirm_overwrite": confirm_overwrite,
     }))
+
+
+@mcp.tool()
+def calibrate_plus_v142(workspace: str, process_id: int | None = None, open_menu: str | None = None,
+                         open_menu_item: str | None = None,
+                         close_auxiliary_dialogs: bool = False,
+                         backend: str = "plus") -> str:
+    """Open local official PLUS V1.4.2 once and save a local UI-control calibration report; it does not submit a model run."""
+    parameters: dict[str, Any] = {"workspace": workspace}
+    if process_id is not None:
+        parameters["process_id"] = process_id
+    if open_menu is not None:
+        parameters["open_menu"] = open_menu
+    if open_menu_item is not None:
+        parameters["open_menu_item"] = open_menu_item
+    if close_auxiliary_dialogs:
+        parameters["close_auxiliary_dialogs"] = True
+    return json_result(registry.call(backend, "plus.calibrate", parameters))
 
 
 @mcp.tool()

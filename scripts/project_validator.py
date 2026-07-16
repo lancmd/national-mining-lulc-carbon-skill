@@ -11,6 +11,7 @@ from typing import Any
 
 from path_safety import PathSafetyError, resolved, require_within, resolve_input
 from plus_contract import re_contract_errors
+from spatial_contract import parse_driver_factors
 
 
 REQUIRED_CARBON_COLUMNS = {"lucode", "c_above", "c_below", "c_soil", "c_dead"}
@@ -118,6 +119,30 @@ def imagery_periods(inputs: dict[str, Any], base: Path, input_roots: list[Path],
     return result
 
 
+def historical_lulc_periods(inputs: dict[str, Any], base: Path, input_roots: list[Path], errors: list[str]) -> list[dict[str, Any]]:
+    raw = inputs.get("historical_lulc_periods")
+    if raw is None:
+        return []
+    if not isinstance(raw, list) or not raw:
+        errors.append("inputs.historical_lulc_periods must be a non-empty list when supplied")
+        return []
+    years: list[int] = []
+    for index, item in enumerate(raw):
+        if not isinstance(item, dict):
+            errors.append(f"historical_lulc_periods[{index}] must be an object with year and path"); continue
+        year = item.get("year")
+        if not isinstance(year, int) or not 1900 <= year <= 2200:
+            errors.append(f"historical_lulc_periods[{index}].year must be an integer from 1900 to 2200")
+        else:
+            years.append(year)
+        required_path(f"historical_lulc_periods[{index}].path", item.get("path"), base, input_roots, errors)
+    if len(years) != len(set(years)):
+        errors.append("inputs.historical_lulc_periods years must be unique")
+    if years != sorted(years):
+        errors.append("inputs.historical_lulc_periods must be sorted from earliest to latest")
+    return raw
+
+
 def validate(project_path: Path) -> dict[str, Any]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -132,6 +157,9 @@ def validate(project_path: Path) -> dict[str, Any]:
     if not isinstance(inputs, dict):
         errors.append("inputs must be an object")
         inputs = {}
+    if inputs.get("subsidence_depth_raster") and inputs.get("subsidence_w_dat"):
+        errors.append("provide either inputs.subsidence_depth_raster or inputs.subsidence_w_dat, not both")
+    dated_lulc = historical_lulc_periods(inputs, base, input_roots, errors)
     classification = project.get("classification", {})
     plus = project.get("plus", {})
     invest = project.get("invest", {})
@@ -184,18 +212,22 @@ def validate(project_path: Path) -> dict[str, Any]:
         if automatic_history:
             # Paths and chronological years were checked in the classification block.
             pass
+        elif dated_lulc and len(dated_lulc) >= 2:
+            pass
         elif not isinstance(historical, list) or len(historical) < 2:
             errors.append("PLUS requires at least two historical_lulc rasters, or two or more inputs.imagery_periods for automatic classification")
         else:
             for index, item in enumerate(historical):
                 required_path(f"historical_lulc[{index}]", item, base, input_roots, errors)
         factors = inputs.get("driver_factors", {})
-        if not isinstance(factors, dict) or not any(factors.values()):
+        try:
+            typed_factors = parse_driver_factors(factors)
+        except ValueError as error:
+            errors.append(str(error)); typed_factors = {}
+        if not typed_factors:
             errors.append("PLUS requires local driver_factors")
-            factors = {}
-        for key, value in factors.items():
-            if value:
-                required_path(f"driver_factors.{key}", value, base, input_roots, errors)
+        for key, value in typed_factors.items():
+            required_path(f"driver_factors.{key}", value["path"], base, input_roots, errors)
         scenarios = plus.get("scenarios", [])
         if not isinstance(scenarios, list) or not scenarios:
             errors.append("PLUS requires at least one scenario")
@@ -225,7 +257,7 @@ def validate(project_path: Path) -> dict[str, Any]:
                 errors.append("PLUS RE requires inputs.subsidence_depth_raster or inputs.subsidence_w_dat")
             if isinstance(resource, dict):
                 for factor in resource.get("additional_driver_factors", []):
-                    if factor not in factors or not factors.get(factor):
+                    if factor not in typed_factors:
                         errors.append(f"PLUS RE additional driver is missing: driver_factors.{factor}")
                 if inputs.get("subsidence_w_dat"):
                     source = resource.get("w_dat_preprocessing", {})
@@ -233,7 +265,15 @@ def validate(project_path: Path) -> dict[str, Any]:
                         errors.append("PLUS RE w.dat source_unit must be m or mm")
                     if source.get("source_convention") not in {"negative_down", "positive_down"}:
                         errors.append("PLUS RE w.dat source_convention must be negative_down or positive_down")
-                    warnings.append("RE will standardise and align w.dat to the latest LULC grid before PLUS starts.")
+                    if source.get("interpolation", "nearest_within_scope") not in {"nearest_within_scope", "none"}:
+                        errors.append("PLUS RE w.dat interpolation must be nearest_within_scope or none")
+                    if source.get("interpolation", "nearest_within_scope") == "nearest_within_scope":
+                        scope = source.get("scope_vector") or inputs.get("workface_boundary")
+                        required_path("PLUS RE w.dat interpolation scope", scope, base, input_roots, errors)
+                        value = source.get("max_interpolation_distance_m")
+                        if not isinstance(value, (int, float)) or value <= 0:
+                            errors.append("PLUS RE w.dat max_interpolation_distance_m must be positive")
+                    warnings.append("RE will standardise w.dat and interpolate only within the declared local scope.")
 
     if invest.get("enabled"):
         models = invest.get("models")
@@ -335,7 +375,17 @@ def validate(project_path: Path) -> dict[str, Any]:
             if not isinstance(value, int) or value < 1:
                 errors.append("ecosystem_service.analysis.grid_cell_pixels must be a positive integer")
         if isinstance(analysis, dict) and analysis.get("geodetector_factor_fields"):
-            required_path("ecosystem geodetector_samples", analysis.get("geodetector_samples"), base, input_roots, errors)
+            automated_target = analysis.get("geodetector_target_raster")
+            automated_factors = analysis.get("geodetector_factor_rasters")
+            if automated_target or automated_factors:
+                required_path("ecosystem geodetector_target_raster", automated_target, base, input_roots, errors)
+                if not isinstance(automated_factors, dict):
+                    errors.append("ecosystem geodetector_factor_rasters must map each field to a raster")
+                else:
+                    for field in analysis.get("geodetector_factor_fields", []):
+                        required_path(f"ecosystem geodetector factor {field}", automated_factors.get(field), base, input_roots, errors)
+            else:
+                required_path("ecosystem geodetector_samples", analysis.get("geodetector_samples"), base, input_roots, errors)
 
     if gis_outputs.get("enabled"):
         required_path("gis_outputs.aprx", gis_outputs.get("aprx"), base, input_roots, errors)

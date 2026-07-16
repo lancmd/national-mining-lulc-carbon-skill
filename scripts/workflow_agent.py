@@ -44,6 +44,33 @@ def first_existing(candidates: list[str | None]) -> str | None:
     return None
 
 
+def arcgis_registry_paths() -> tuple[str | None, str | None]:
+    """Find a standard ArcGIS Pro installation without committing a user path.
+
+    ArcGIS Pro records its installation directory in the Windows registry.  This
+    is a read-only discovery step and remains behind explicit local-path and
+    environment-variable overrides.  Non-Windows hosts intentionally return no
+    candidates.
+    """
+    if sys.platform != "win32":
+        return None, None
+    try:
+        import winreg  # type: ignore[attr-defined]
+        for key_name in (r"SOFTWARE\ESRI\ArcGISPro", r"SOFTWARE\WOW6432Node\ESRI\ArcGISPro"):
+            try:
+                with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_name) as key:
+                    install_dir, _ = winreg.QueryValueEx(key, "InstallDir")
+            except OSError:
+                continue
+            root = Path(str(install_dir)).expanduser()
+            propy = root / "bin" / "Python" / "scripts" / "propy.bat"
+            application = root / "bin" / "ArcGISPro.exe"
+            return str(propy), str(application)
+    except (ImportError, OSError):
+        pass
+    return None, None
+
+
 def software_version(name: str, executable: str | None) -> str | None:
     """Probe command-line versions where the vendor executable documents one safely."""
     if not executable or name not in {"invest", "gdalinfo"}:
@@ -76,14 +103,15 @@ def local_paths() -> dict[str, Any]:
 def probe_software(overrides: dict[str, Any] | None = None) -> dict[str, Any]:
     overrides = overrides or {}
     configured = local_paths()
+    registry_propy, registry_arcgis = arcgis_registry_paths()
     path_candidates = {
         "arcgis_propy": [
             overrides.get("arcgis_propy"), configured.get("arcgis_propy"), os.getenv("ARCGIS_PROPY"),
-            shutil.which("propy.bat"),
+            shutil.which("propy.bat"), registry_propy,
         ],
         "arcgis_pro": [
             overrides.get("arcgis_pro"), configured.get("arcgis_pro"), os.getenv("ARCGIS_PRO_EXE"),
-            shutil.which("ArcGISPro.exe"),
+            shutil.which("ArcGISPro.exe"), registry_arcgis,
         ],
         "invest": [
             overrides.get("invest"), configured.get("invest"), os.getenv("INVEST_CLI"), shutil.which("invest"),
@@ -91,8 +119,8 @@ def probe_software(overrides: dict[str, Any] | None = None) -> dict[str, Any]:
         "idl": [
             overrides.get("idl"), configured.get("idl"), os.getenv("IDL_EXE"), shutil.which("idl"),
         ],
-        "plus": [overrides.get("plus"), configured.get("plus_v141_executable"), configured.get("plus"),
-                 os.getenv("PLUS_V141_EXECUTABLE"), os.getenv("PLUS_EXE"), shutil.which("PLUS.exe")],
+        "plus": [overrides.get("plus"), configured.get("plus_v142_executable"), configured.get("plus"),
+                 os.getenv("PLUS_V142_EXECUTABLE"), os.getenv("PLUS_EXE"), shutil.which("PLUS V1.4.2.exe")],
         "gdalinfo": [
             overrides.get("gdalinfo"), configured.get("gdalinfo"), os.getenv("GDALINFO"), shutil.which("gdalinfo"),
         ],
@@ -319,6 +347,9 @@ class JobRunner:
 
     def run(self, selected_stage: str | None = None) -> int:
         failures = 0
+        self.state["workflow"] = {"status": "running", "resumed_at": now()}
+        self.save_state()
+        paused = False
         enabled_ids = {item["id"] for item in self.job.get("stages", []) if item.get("enabled")}
         for stage in self.job.get("stages", []):
             stage_id = stage.get("id", "unnamed")
@@ -349,6 +380,13 @@ class JobRunner:
                 if record["status"] == "completed" and stage.get("outputs") and not self.declared_outputs_exist(stage):
                     raise RuntimeError("command succeeded but one or more declared outputs are missing")
                 print(f"{record['status'].upper()} {stage_id}")
+                if record["status"] in {"waiting_interactive", "prepared", "pending_validation"}:
+                    # A GUI handoff is a deliberate pause, not a failed
+                    # dependency.  The next resume rechecks this exact stage;
+                    # when its declared raster appears, downstream stages run.
+                    paused = True
+                    self.state["workflow"] = {"status": "paused", "reason": record["status"],
+                                              "paused_at_stage": stage_id, "paused_at": now()}
             except Exception as error:
                 record.update({"status": "failed", "error": str(error)})
                 failures += 1
@@ -356,8 +394,13 @@ class JobRunner:
             finally:
                 record["finished_at"] = now()
                 self.save_state()
+            if paused:
+                break
             if failures and not self.continue_on_error:
                 break
+        if not failures and not paused:
+            self.state["workflow"] = {"status": "completed", "completed_at": now()}
+            self.save_state()
         try:
             records = write_records(self.workspace, self.job, self.state, self.probe)
             self.state["records"] = records

@@ -22,7 +22,8 @@ job.write_text(json.dumps({
     "software": {}, "stages": [],
 }), encoding="utf-8")
 record = submit(job)
-for _ in range(30):
+deadline = time.monotonic() + 15
+while time.monotonic() < deadline:
     current = status(record["job_id"])
     if current["status"] != "running":
         break

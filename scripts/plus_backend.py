@@ -86,7 +86,10 @@ def write_request_pack(envelope: dict[str, Any]) -> tuple[str, str]:
     workspace.mkdir(parents=True, exist_ok=True)
     pack = workspace / f"plus_local_request_{scenario}.json"
     pack.write_text(json.dumps(envelope, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    state = workspace / "plus_execution_state.json"
+    # The version-specific GUI bridge owns plus_execution_state.json.  Keeping
+    # this generic request receipt separate prevents a resumed workflow from
+    # erasing a live GUI PID and its completed-step checkpoint.
+    state = workspace / "plus_backend_request_state.json"
     state.write_text(json.dumps({"scenario": scenario, "status": "prepared", "request": str(pack),
                                  "expected_output": str(expected)}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return str(pack), str(state)
@@ -177,10 +180,27 @@ def main() -> int:
                 "backend": "plus", "mode": "local-command-bridge", "local_only": True,
                 "bridge_configured": bool(command),
                 "bridge_capabilities": inspect_bridge(command, envelope),
-                "operations": ["system.capabilities", "plus.run_scenario"],
+                "operations": ["system.capabilities", "plus.calibrate", "plus.run_scenario"],
             })
-        elif operation != "plus.run_scenario":
+        elif operation not in {"plus.run_scenario", "plus.calibrate"}:
             result = response(envelope, "failed", error=f"unsupported PLUS operation: {operation}")
+        elif operation == "plus.calibrate":
+            command = bridge_command()
+            if not command:
+                result = response(envelope, "failed", error="local PLUS bridge is not configured")
+            else:
+                # Calibration may cross a local UAC boundary before the
+                # elevated UI Automation worker can attach.  Two minutes was
+                # shorter than that normal local handoff and turned an in-progress
+                # calibration into a false bridge failure.
+                calibration_timeout = float(envelope.get("parameters", {}).get("timeout_seconds", 300))
+                if not 30 <= calibration_timeout <= 900:
+                    raise ValueError("PLUS calibration timeout_seconds must be between 30 and 900")
+                process = subprocess.run(command, input=json.dumps(envelope, ensure_ascii=True), text=True,
+                                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8",
+                                         errors="replace", timeout=calibration_timeout, check=False)
+                result = (response(envelope, "failed", error=process.stderr.strip() or f"local PLUS bridge returned {process.returncode}")
+                          if process.returncode else json.loads(process.stdout))
         else:
             adopted = adopt_existing_output(envelope)
             command = bridge_command()

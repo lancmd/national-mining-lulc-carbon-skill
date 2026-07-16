@@ -193,6 +193,13 @@ def validate(spec: dict[str, Any]) -> dict[str, Any]:
                 errors.append(f"{name}: projected metre CRS is required for area or volume calculations")
             if entry.get("require_nodata") and info.get("nodata") is None:
                 errors.append(f"{name}: an explicit NoData value is required")
+            expected_cell = entry.get("expected_cell_size_m")
+            if expected_cell is not None:
+                transform = info.get("transform") or []
+                if (not isinstance(expected_cell, (int, float)) or float(expected_cell) <= 0 or len(transform) < 6 or
+                        not math.isclose(abs(float(transform[0])), float(expected_cell), rel_tol=1e-8, abs_tol=1e-8) or
+                        not math.isclose(abs(float(transform[4])), float(expected_cell), rel_tol=1e-8, abs_tol=1e-8)):
+                    errors.append(f"{name}: cell size is not the required {expected_cell:g} m analysis grid")
             if entry.get("kind") == "continuous" and info.get("nonfinite_count"):
                 errors.append(f"{name}: continuous raster contains {info['nonfinite_count']} NaN or infinite values")
             if entry.get("kind") == "lulc":

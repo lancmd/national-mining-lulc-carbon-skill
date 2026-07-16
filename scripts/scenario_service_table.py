@@ -21,6 +21,8 @@ def raster_total(path: Path, aggregation: str = "sum") -> float:
             values = src.read(1, window=window, masked=True)
             valid = values.compressed()
             total += float(valid.sum(dtype="float64")); count += int(valid.size)
+    if not count:
+        raise ValueError(f"service raster has no valid pixels (NoData is not a zero service): {path}")
     if aggregation == "depth_mm_to_m3":
         return total * cell_area_m2 / 1000.0
     if aggregation == "mean":
@@ -28,24 +30,28 @@ def raster_total(path: Path, aggregation: str = "sum") -> float:
     return total
 
 
-def grid_totals(path: Path, cell_pixels: int, aggregation: str = "sum") -> dict[str, float]:
+def grid_totals(path: Path, cell_pixels: int, aggregation: str = "sum") -> dict[str, float | None]:
     """Aggregate a raster into deterministic regular-grid units without vector dependencies."""
     if cell_pixels < 1:
         raise ValueError("grid_cell_pixels must be a positive integer")
     import numpy as np  # type: ignore
     import rasterio  # type: ignore
     from rasterio.windows import Window  # type: ignore
-    result: dict[str, float] = {}
+    result: dict[str, float | None] = {}
     with rasterio.open(path) as src:
         for row in range(0, src.height, cell_pixels):
             for col in range(0, src.width, cell_pixels):
                 height, width = min(cell_pixels, src.height - row), min(cell_pixels, src.width - col)
                 values = src.read(1, window=Window(col, row, width, height), masked=True)
-                valid = values.compressed(); total = float(valid.sum(dtype="float64"))
+                valid = values.compressed()
+                if not valid.size:
+                    result[f"r{row // cell_pixels:05d}_c{col // cell_pixels:05d}"] = None
+                    continue
+                total = float(valid.sum(dtype="float64"))
                 if aggregation == "depth_mm_to_m3":
                     total *= abs(float(src.transform.a * src.transform.e)) / 1000.0
                 elif aggregation == "mean":
-                    total = total / int(valid.size) if valid.size else 0.0
+                    total = total / int(valid.size)
                 result[f"r{row // cell_pixels:05d}_c{col // cell_pixels:05d}"] = total
     return result
 
@@ -120,10 +126,14 @@ def build(service_rasters: dict[str, dict[str, Path]], supplemental: Path | None
             by_field = {field: grid_totals(raster, grid_cell_pixels, (service_aggregations or {}).get(field, "sum")) for field, raster in services.items()}
             unit_ids = set().union(*[set(values) for values in by_field.values()])
             for unit_id in sorted(unit_ids):
+                if any(values.get(unit_id) is None for values in by_field.values()):
+                    # Preserve NoData semantics: an analysis unit with missing
+                    # coverage is excluded, never silently converted to zero.
+                    continue
                 row: dict[str, Any] = supplied_by_key.get((code, unit_id), {scenario_field: code, id_field: unit_id})
                 row.setdefault(scenario_field, code); row.setdefault(id_field, unit_id)
                 for field, values in by_field.items():
-                    row[field] = values.get(unit_id, 0.0)
+                    row[field] = values[unit_id]
                 result.append(row)
         else:
             row = supplied_by_key.get((code, code), {scenario_field: code, id_field: code})

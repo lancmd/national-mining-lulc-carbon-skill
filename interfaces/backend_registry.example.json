@@ -2,15 +2,14 @@
   "protocol_version": "1.0",
   "backends": {
     "envi": {
-      "transport": "socket",
-      "host": "127.0.0.1",
-      "port": 9882,
-      "capabilities": ["envi.supervised_classification", "system.job_status", "system.list_outputs"]
+      "transport": "command",
+      "command": ["{python}", "{skill_root}/scripts/envi_backend.py"],
+      "capabilities": ["envi.supervised_classification"]
     },
     "plus": {
       "transport": "command",
       "command": ["{python}", "{skill_root}/scripts/plus_backend.py"],
-      "capabilities": ["plus.run_scenario"]
+      "capabilities": ["plus.calibrate", "plus.run_scenario"]
     },
     "arcgis": {
       "transport": "command",

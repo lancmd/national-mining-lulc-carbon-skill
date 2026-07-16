@@ -14,6 +14,7 @@
     "mine_boundary": null,
     "carbon_density": null,
     "historical_lulc": [],
+    "historical_lulc_periods": [],
     "lulc_baseline": null,
     "training_roi": null,
     "model_package": null,
@@ -78,7 +79,10 @@
         "source_unit": null,
         "source_convention": null,
         "output_depth_unit": "m",
-        "output_depth_convention": "positive_down"
+        "output_depth_convention": "positive_down",
+        "interpolation": "nearest_within_scope",
+        "scope_vector": null,
+        "max_interpolation_distance_m": null
       }
     }
   },
@@ -97,6 +101,7 @@
   "subsidence_water": {
     "enabled": false,
     "mode": "classify_only",
+    "water_code": 1,
     "water_level_elevation_m": null,
     "water_level_vertical_datum": null,
     "output_depth_raster": "outputs/subsidence_water_depth.tif",
@@ -123,7 +128,12 @@
       "grid_cell_pixels": null,
       "geodetector_target_field": "ecosystem_service_score",
       "geodetector_factor_fields": [],
-      "geodetector_samples": null
+      "geodetector_samples": null,
+      "geodetector_target_raster": null,
+      "geodetector_factor_rasters": {},
+      "geodetector_samples_output": "outputs/ecosystem/geodetector_samples.csv",
+      "geodetector_sample_step": 1,
+      "geodetector_continuous_bins": 6
     }
   },
   "gis_outputs": {

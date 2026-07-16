@@ -117,19 +117,25 @@ def validate_invest(source: dict[str, Any]) -> dict[str, Any]:
             for name, model in models.items():
                 if name == "carbon":
                     continue
-                if not isinstance(model, dict) or model.get("status") != "completed":
-                    errors.append(f"InVEST {name} output validation is incomplete")
-                    continue
-                outputs = model.get("outputs")
-                units = model.get("units")
-                if not isinstance(outputs, list) or not outputs or not all(isinstance(item, str) and item for item in outputs):
-                    errors.append(f"InVEST {name} requires one or more declared output files")
-                if (not isinstance(units, dict) or not units or
-                        any(not isinstance(value, str) or not value.strip() or value.strip().lower() == "undeclared"
-                            for value in units.values())):
-                    errors.append(f"InVEST {name} requires declared output units")
-                else:
-                    checks.append(f"{name} output contract")
+                if not isinstance(model, dict):
+                    errors.append(f"InVEST {name} evidence must be an object"); continue
+                scenarios = model.get("scenarios") if isinstance(model.get("scenarios"), dict) else {"baseline": model}
+                if not scenarios:
+                    errors.append(f"InVEST {name} has no scenario/year evidence"); continue
+                for scenario, entry in scenarios.items():
+                    if not isinstance(entry, dict) or entry.get("status") != "completed":
+                        errors.append(f"InVEST {name}/{scenario} output validation is incomplete")
+                        continue
+                    outputs = entry.get("outputs")
+                    units = entry.get("units")
+                    if not isinstance(outputs, list) or not outputs or not all(isinstance(item, str) and item for item in outputs):
+                        errors.append(f"InVEST {name}/{scenario} requires one or more declared output files")
+                    if (not isinstance(units, dict) or not units or
+                            any(not isinstance(value, str) or not value.strip() or value.strip().lower() == "undeclared"
+                                for value in units.values())):
+                        errors.append(f"InVEST {name}/{scenario} requires declared output units")
+                    else:
+                        checks.append(f"{name}/{scenario} output contract")
     return section("failed" if errors else "completed", checks, errors)
 
 
@@ -167,10 +173,21 @@ def validate_ecosystem(source: dict[str, Any]) -> dict[str, Any]:
 def validate_subsidence_water(source: dict[str, Any]) -> dict[str, Any]:
     if not source:
         return section("pending_validation", [], ["subsidence-water validation evidence is absent"])
-    required = ("water_volume_m3", "subsidence_water_composite_carbon_t_c")
+    mode = source.get("mode")
+    if mode == "classify_only":
+        errors = []
+        if not isinstance(source.get("water_code"), int) or source["water_code"] < 1:
+            errors.append("classify_only evidence requires a positive water_code")
+        for field in ("water_cell_count", "water_area_m2"):
+            if not isinstance(source.get(field), (int, float)) or not math.isfinite(float(source[field])) or float(source[field]) < 0:
+                errors.append(f"{field} must be a finite non-negative number")
+        return section("failed" if errors else "completed", ["classified-water coverage"], errors)
+    required = ("water_volume_m3",) if mode == "estimate_volume" else ("water_volume_m3", "subsidence_water_composite_carbon_t_c")
     errors = [f"{field} must be a finite non-negative number" for field in required
               if not isinstance(source.get(field), (int, float)) or not math.isfinite(float(source[field])) or float(source[field]) < 0]
-    return section("failed" if errors else "completed", ["volume and composite-carbon balance"], errors)
+    if mode not in {"estimate_volume", "composite_subsidence_water_carbon"}:
+        errors.append("subsidence-water evidence mode is missing or unsupported")
+    return section("failed" if errors else "completed", ["volume" if mode == "estimate_volume" else "volume and composite-carbon balance"], errors)
 
 
 def validate_map(source: dict[str, Any]) -> dict[str, Any]:

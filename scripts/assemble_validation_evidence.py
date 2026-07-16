@@ -70,21 +70,30 @@ def invest_evidence(workspace: Path) -> dict[str, Any] | None:
             continue
         record = stage_state.get(identifier, {}) if isinstance(stage_state, dict) else {}
         declared = [str(item) for item in stage.get("outputs", []) if isinstance(item, str)]
-        models[model] = {"status": record.get("status", "pending_validation"), "outputs": declared,
-                         "units": {str(stage.get("service_field", "value")): stage.get("service_unit", "")}}
+        scenario = identifier.removeprefix(f"invest_{model}").lstrip("_") or "baseline"
+        models.setdefault(model, {"scenarios": {}})["scenarios"][scenario] = {
+            "status": record.get("status", "pending_validation"), "outputs": declared,
+            "units": {str(stage.get("service_field", "value")): stage.get("service_unit", "")},
+        }
     if models:
         evidence["models"] = models
     return evidence
 
 
 def subsidence_water_evidence(workspace: Path) -> dict[str, Any] | None:
+    for path in sorted(workspace.glob("validation/subsidence_water_classification*.json")):
+        report = read_json(path)
+        if report and report.get("mode") == "classify_only":
+            return report | {"source": str(path.resolve())}
     required = ("water_volume_m3", "subsidence_water_composite_carbon_t_c")
     for path in sorted(workspace.glob("outputs/**/*.csv")):
         try:
             with path.open("r", encoding="utf-8-sig", newline="") as stream:
                 row = next(csv.DictReader(stream), None)
             if row and all(field in row for field in required):
-                return {field: float(row[field]) for field in required} | {"source": str(path.resolve())}
+                return {field: float(row[field]) for field in required} | {"mode": "composite_subsidence_water_carbon", "source": str(path.resolve())}
+            if row and "water_volume_m3" in row:
+                return {"water_volume_m3": float(row["water_volume_m3"]), "mode": "estimate_volume", "source": str(path.resolve())}
         except (OSError, ValueError, StopIteration):
             continue
     return None

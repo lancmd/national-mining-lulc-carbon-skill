@@ -19,9 +19,9 @@ with tempfile.TemporaryDirectory() as temporary:
     root = Path(temporary)
     for name in ("lulc.tif", "precip.tif", "eto.tif", "root.tif", "pawc.tif", "watersheds.gpkg", "threat.tif"):
         (root / name).write_bytes(b"fixture")
-    (root / "bio.csv").write_text("lucode,root_depth,kc\n1,1000,0.8\n", encoding="utf-8")
+    (root / "bio.csv").write_text("lucode,root_depth,Kc,lulc_veg\n1,1000,0.8,1\n", encoding="utf-8")
     (root / "threats.csv").write_text("threat,max_dist,weight,decay,cur_path\nroad,1000,1,linear,threat.tif\n", encoding="utf-8")
-    (root / "sensitivity.csv").write_text("lucode,habitat,road\n1,1,0.5\n", encoding="utf-8")
+    (root / "sensitivity.csv").write_text("lulc,habitat,road\n1,1,0.5\n", encoding="utf-8")
     awy = {"args": {"lulc_path": "lulc.tif", "precipitation_path": "precip.tif", "eto_path": "eto.tif",
                     "depth_to_root_rest_layer_path": "root.tif", "pawc_path": "pawc.tif", "watersheds_path": "watersheds.gpkg",
                     "biophysical_table_path": "bio.csv", "seasonality_constant": 8.1}}

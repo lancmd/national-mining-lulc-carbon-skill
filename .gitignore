@@ -6,3 +6,9 @@ jobs/
 mcp_server/.venv/
 interfaces/backend_registry.json
 config/local_paths.json
+config/plus_v142_ui_profile.json
+config/llm_provider.json
+examples/huaibei_demo/data/
+examples/huaibei_demo/runtime/
+examples/huaibei_demo/screenshots/*
+!examples/huaibei_demo/screenshots/.gitkeep

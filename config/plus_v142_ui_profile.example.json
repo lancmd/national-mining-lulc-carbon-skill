@@ -1,0 +1,42 @@
+{
+  "profile_version": "1.0",
+  "software": "HPSCIL official PLUS snapshot",
+  "calibrated": false,
+  "startup_wait_seconds": 2,
+  "window": {
+    "backend": "uia",
+    "title_re": ".*(PLUS|Patch-generating Land Use Simulation).*",
+    "timeout_seconds": 20
+  },
+  "steps": [],
+  "scenario_steps": {
+    "ND": [],
+    "UD": [],
+    "EP": [],
+    "RE": []
+  },
+  "selector_catalog": {
+    "observed_on": "HPSCIL repository snapshot; live Qt title reports PLUS V1.4.1",
+    "main_menu": {"uia": {"title": "PLUS", "control_type": "MenuItem"}},
+    "leas": {
+      "driver_factor_folder": {"uia": {"auto_id": "QtGuiLEAS.splitter_2.groupBox.splitter.layoutWidget1.lineEdit", "control_type": "Edit"}},
+      "development_potential_output": {"uia": {"auto_id": "QtGuiLEAS.splitter_2.groupBox_2.lineEdit_4", "control_type": "Edit"}},
+      "start": {"uia": {"auto_id": "QtGuiLEAS.splitter_2.layoutWidget3.pushButton_3", "control_type": "Button"}}
+    },
+    "cars": {
+      "neighborhood_size": {"uia": {"auto_id": "QtGuiCARS.spinBox", "control_type": "Spinner"}},
+      "thread_count": {"uia": {"auto_id": "QtGuiCARS.spinBox_4", "control_type": "Spinner"}},
+      "output_folder": {"uia": {"auto_id": "QtGuiCARS.groupBox_2.lineEdit_5", "control_type": "Edit"}},
+      "patch_threshold": {"uia": {"auto_id": "QtGuiCARS.lineEdit", "control_type": "Edit"}},
+      "expansion_coefficient": {"uia": {"auto_id": "QtGuiCARS.lineEdit_2", "control_type": "Edit"}},
+      "seed_percentage": {"uia": {"auto_id": "QtGuiCARS.lineEdit_3", "control_type": "Edit"}},
+      "run": {"uia": {"auto_id": "QtGuiCARS.pushButton", "control_type": "Button"}}
+    }
+  },
+  "notes": [
+    "Copy this file to config/plus_v142_ui_profile.json. The runtime creates a local calibration report with control titles, AutomationId values and a window screenshot.",
+    "For every actual action provide target.uia first. target.image is a local PNG fallback relative to this profile; it is matched only after the UI Automation selector fails.",
+    "Supported actions: click, set_text, select, menu, hotkey, wait and capture. Values may reference ${scenario}, ${workspace}, ${expected_output}, ${historical_lulc_0}, ${driver_dem}, ${plus_random_seed} and RE fields such as ${re_core_driver_input}.",
+    "Set calibrated to true only after checking the profile against the local HPSCIL PLUS snapshot window. Its repository file name is V1.4.2 while the observed window title is V1.4.1; the profile must use the observed controls, not infer a version from either label. Use unique step ids so an interrupted run can attach to the existing GUI and continue safely."
+  ]
+}

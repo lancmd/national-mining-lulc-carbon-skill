@@ -523,16 +523,27 @@ def main() -> int:
         print(json.dumps({"version": arcpy.GetInstallInfo().get("Version"),
                           "product": arcpy.ProductInfo()}, ensure_ascii=False))
         return 0
+    spatial_status = arcpy.CheckOutExtension("Spatial")
+    if spatial_status != "CheckedOut":
+        raise SystemExit(f"ArcGIS Spatial Analyst extension is unavailable: {spatial_status}")
     workspace = args.workspace.resolve()
     workspace.mkdir(parents=True, exist_ok=True)
     environment = dict(spec.get("environment", {}))
+    # The CLI confirmation is the explicit consent required by the workflow
+    # contract.  It must also reach ArcPy; otherwise validation permits an
+    # overwrite while the geoprocessing tool still fails on an existing output.
+    if args.confirm_overwrite:
+        environment["overwriteOutput"] = True
     for key in ("snapRaster", "cellSize", "extent", "mask"):
         if isinstance(environment.get(key), str):
             environment[key] = resolve(environment[key], workspace)
-    with arcpy.EnvManager(**environment):
-        for operation in spec["operations"]:
-            execute_operation(arcpy, operation, workspace)
-            print(f"COMPLETED {operation['id']}")
+    try:
+        with arcpy.EnvManager(**environment):
+            for operation in spec["operations"]:
+                execute_operation(arcpy, operation, workspace)
+                print(f"COMPLETED {operation['id']}")
+    finally:
+        arcpy.CheckInExtension("Spatial")
     return 0
 
 

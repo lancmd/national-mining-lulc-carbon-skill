@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="520" viewBox="0 0 1600 520" role="img" aria-labelledby="title description">
+  <title id="title">MAESA Agent</title>
+  <desc id="description">Local-first mining-area ecological space analysis agent</desc>
+  <defs>
+    <linearGradient id="background" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#071b2d"/>
+      <stop offset="0.52" stop-color="#0e4960"/>
+      <stop offset="1" stop-color="#16826f"/>
+    </linearGradient>
+    <linearGradient id="land" x1="0" x2="1">
+      <stop offset="0" stop-color="#b4d985"/>
+      <stop offset="1" stop-color="#58a66c"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="13" flood-color="#001421" flood-opacity=".34"/>
+    </filter>
+  </defs>
+  <rect width="1600" height="520" fill="url(#background)"/>
+  <g opacity=".24" stroke="#c9f6ec" stroke-width="1">
+    <path d="M0 96H1600M0 176H1600M0 256H1600M0 336H1600M0 416H1600"/>
+    <path d="M104 0V520M264 0V520M424 0V520M584 0V520M744 0V520M904 0V520M1064 0V520M1224 0V520M1384 0V520M1544 0V520"/>
+  </g>
+  <path d="M0 366 C160 312 250 414 390 354 C515 301 618 370 768 331 C933 287 1025 370 1162 321 C1322 265 1442 331 1600 285 L1600 520 L0 520Z" fill="url(#land)" opacity=".92"/>
+  <path d="M0 410 C150 365 286 451 435 401 C590 349 699 435 852 387 C1013 337 1121 420 1264 369 C1410 318 1490 381 1600 345" fill="none" stroke="#e4f6c9" stroke-width="4" opacity=".48"/>
+  <g transform="translate(1065 80)" filter="url(#shadow)">
+    <path d="M184 0 348 92 348 275 184 368 20 275 20 92Z" fill="#0c3146" stroke="#b9f4d7" stroke-width="4"/>
+    <path d="M184 35 316 109 184 183 52 109Z" fill="#3ec2a2"/>
+    <path d="M52 132 166 196 166 332 52 268Z" fill="#258a78"/>
+    <path d="M316 132 202 196 202 332 316 268Z" fill="#65d3b6"/>
+    <path d="M184 210V302M138 236 230 289M230 236 138 289" stroke="#eaffd8" stroke-width="7" stroke-linecap="round"/>
+    <circle cx="184" cy="256" r="14" fill="#f5d982"/>
+  </g>
+  <g transform="translate(112 112)" fill="#ecfff8">
+    <text x="0" y="0" font-family="Segoe UI, Arial, sans-serif" font-size="27" font-weight="600" letter-spacing="6">LOCAL-FIRST GEOSPATIAL AGENT</text>
+    <text x="0" y="102" font-family="Segoe UI, Arial, sans-serif" font-size="88" font-weight="750" letter-spacing="2">MAESA</text>
+    <text x="3" y="158" font-family="Segoe UI, Arial, sans-serif" font-size="34" font-weight="400" fill="#bde7d9">Mining Area Ecological Space Analysis Agent</text>
+    <g transform="translate(0 211)" font-family="Segoe UI, Arial, sans-serif" font-size="23" font-weight="600">
+      <rect width="170" height="45" rx="22" fill="#eafbd6"/><text x="28" y="30" fill="#174a42">LULC</text>
+      <rect x="184" width="170" height="45" rx="22" fill="#eafbd6"/><text x="222" y="30" fill="#174a42">PLUS</text>
+      <rect x="368" width="170" height="45" rx="22" fill="#eafbd6"/><text x="400" y="30" fill="#174a42">InVEST</text>
+      <rect x="552" width="207" height="45" rx="22" fill="#eafbd6"/><text x="580" y="30" fill="#174a42">ArcGIS Pro</text>
+    </g>
+    <text x="2" y="335" font-family="Consolas, monospace" font-size="21" fill="#dcf7ef">LLM copilot  ·  local MCP  ·  reproducible outputs</text>
+  </g>
+</svg>

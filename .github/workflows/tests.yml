@@ -20,3 +20,4 @@ jobs:
       - run: python -m pip install -e ".\mcp_server[validation,dev]"
       - run: python -m compileall -q scripts mcp_server tests
       - run: python -m pytest tests/test_smoke_suite.py -q
+      - run: python .\tests\mcp_smoke.py

@@ -1,0 +1,8 @@
+{
+  "provider": "ollama",
+  "base_url": "http://127.0.0.1:11434",
+  "model": "qwen2.5:7b-instruct",
+  "api_key_env": null,
+  "allow_cloud": false,
+  "timeout_seconds": 90
+}

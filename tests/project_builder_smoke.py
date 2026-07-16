@@ -27,4 +27,10 @@ with tempfile.TemporaryDirectory() as temporary:
     assert result["imagery_years"] == [2020, 2025]
     assert project["classification"]["engine"] == "envi"
     assert project["plus"]["scenarios"] == ["ND", "UD", "EP", "RE"]
+    direct = build(root / "generated" / "depth-project.json", "builder-depth", "runtime-depth",
+                   [{"year": 2020, "path": str(root / "image_2020.tif")}, {"year": 2025, "path": str(root / "image_2025.tif")}],
+                   {"dem": str(root / "dem.tif")}, str(root / "boundary.shp"), str(root / "carbon.csv"),
+                   model_package=str(root / "model"), subsidence_depth_raster=str(root / "dem.tif"))
+    depth_project = json.loads(Path(direct["project_file"]).read_text(encoding="utf-8"))
+    assert depth_project["inputs"]["subsidence_depth_raster"] == str((root / "dem.tif").resolve())
 print('{"status":"completed","checks":["agent input builder","dated imagery contract"]}')

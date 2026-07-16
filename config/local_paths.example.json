@@ -3,10 +3,14 @@
   "arcgis_pro": "${ARCGIS_PRO_EXE}",
   "invest": "${INVEST_CLI}",
   "idl": "${IDL_EXE}",
-  "plus": "${PLUS_EXE}",
-  "plus_v141_executable": "${PLUS_V141_EXECUTABLE}",
-  "plus_v141_version": "PLUS V1.4.1",
-  "plus_v141_sha256": "",
+  "plus": "${PLUS_V142_EXECUTABLE}",
+  "plus_v142_repository": "${PLUS_V142_REPOSITORY}",
+  "plus_v142_executable": "${PLUS_V142_EXECUTABLE}",
+  "plus_v142_version": "unverified: executable file is named PLUS V1.4.2.exe; verify live UI title during calibration",
+  "plus_v142_commit": "de7ba6efd35b530da6c37e81103276a17716602c",
+  "plus_v142_sha256": "2f49f4f01c0a209d0d67fabef9013d41fca30b1632e334898abadad5c2eb25d4",
+  "plus_v142_requires_elevation": true,
+  "plus_v142_ui_profile": "${PLUS_V142_UI_PROFILE}",
   "gdalinfo": "${GDALINFO}",
-  "plus_bridge_command": ["{python}", "{skill_root}/scripts/plus_v141_bridge.py"]
+  "plus_bridge_command": ["{python}", "{skill_root}/scripts/plus_v142_gui_bridge.py"]
 }
