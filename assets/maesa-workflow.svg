@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1180" viewBox="0 0 1800 1180" role="img" aria-labelledby="title desc">
+  <title id="title">MAESA Agent end-to-end workflow</title>
+  <desc id="desc">Bilingual local-first mining-area ecological space analysis workflow.</desc>
+  <defs>
+    <linearGradient id="hero" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0b4055"/><stop offset="1" stop-color="#147b71"/></linearGradient>
+    <linearGradient id="stage" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#d9f5f2"/><stop offset="1" stop-color="#b8e5df"/></linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#093f4f" flood-opacity=".12"/></filter>
+    <marker id="arrow" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="10" markerHeight="10" orient="auto-start-reverse"><path d="M1 1 11 6 1 11z" fill="#2f7a79"/></marker>
+    <style>
+      .sans { font-family: 'Noto Sans SC','Microsoft YaHei','Segoe UI',Arial,sans-serif; }
+      .tiny { font-size: 16px; fill: #4a6970; } .label { font-size: 22px; font-weight: 700; fill: #174f59; letter-spacing: .3px; }
+      .stage { font-size: 24px; font-weight: 750; fill: #124b56; } .sub { font-size: 16px; fill: #447077; }
+      .card { font-size: 20px; font-weight: 650; fill: #234d55; } .card-sub { font-size: 15px; fill: #52747a; }
+      .output { font-size: 20px; font-weight: 700; fill: #225c4f; } .output-sub { font-size: 15px; fill: #4d7465; }
+    </style>
+  </defs>
+  <rect width="1800" height="1180" fill="#f7fbfa"/>
+  <path d="M0 1080 C240 985 425 1135 680 1058 C895 993 1075 1115 1330 1032 C1500 977 1650 1035 1800 980 V1180 H0Z" fill="#dff0dc"/>
+  <path d="M0 1102 C250 1010 420 1148 680 1074 C900 1011 1070 1128 1325 1050 C1505 995 1650 1050 1800 998" fill="none" stroke="#95c59e" stroke-width="4" opacity=".75"/>
+  <g class="sans">
+    <text x="900" y="54" text-anchor="middle" font-size="21" font-weight="700" fill="#347379" letter-spacing="5">LOCAL-FIRST · REPRODUCIBLE · HUMAN-CONFIRMED</text>
+    <text x="900" y="98" text-anchor="middle" font-size="34" font-weight="800" fill="#124e58">MAESA Agent Workflow ｜ 矿区生态空间分析工作流</text>
+    <text x="900" y="130" text-anchor="middle" font-size="18" fill="#5a7d82">从本地数据到情景模拟、生态服务与可发表地图 · From local data to validated research outputs</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="585" y="161" width="630" height="94" rx="18" fill="url(#hero)"/>
+    <circle cx="650" cy="208" r="25" fill="#bceee0"/><path d="M639 203h22M639 214h14M663 214h-2" stroke="#12645f" stroke-width="4" stroke-linecap="round"/>
+    <text class="sans" x="700" y="201" font-size="27" font-weight="800" fill="#fff">MAESA Local Agent</text>
+    <text class="sans" x="700" y="229" font-size="17" fill="#d5f5ec">LLM Copilot · local MCP · confirmation-gated execution</text>
+  </g>
+  <path d="M900 255V290M290 255V290M1510 255V290" stroke="#2f7a79" stroke-width="3" marker-end="url(#arrow)"/><path d="M900 275H290M900 275H1510" stroke="#2f7a79" stroke-width="3"/>
+  <g class="sans" filter="url(#shadow)">
+    <path d="M105 292 290 252 475 292 290 332Z" fill="#b8e8eb" stroke="#2f7a79" stroke-width="2"/><text x="290" y="298" text-anchor="middle" class="label">Methods ｜ 研究方法</text>
+    <path d="M625 292 900 246 1175 292 900 338Z" fill="#b8e8eb" stroke="#2f7a79" stroke-width="2"/><text x="900" y="298" text-anchor="middle" class="label">Workflow ｜ 核心流程</text>
+    <path d="M1325 292 1510 252 1695 292 1510 332Z" fill="#b8e8eb" stroke="#2f7a79" stroke-width="2"/><text x="1510" y="298" text-anchor="middle" class="label">Outputs ｜ 研究成果</text>
+  </g>
+  <rect x="72" y="350" width="436" height="664" rx="14" fill="#fff" stroke="#72a3aa" stroke-width="2" stroke-dasharray="8 7"/>
+  <rect x="548" y="350" width="704" height="664" rx="14" fill="#fff" stroke="#72a3aa" stroke-width="2" stroke-dasharray="8 7"/>
+  <rect x="1292" y="350" width="436" height="664" rx="14" fill="#fff" stroke="#72a3aa" stroke-width="2" stroke-dasharray="8 7"/>
+  <g class="sans" filter="url(#shadow)">
+    <rect x="108" y="388" width="364" height="86" rx="10" fill="#e6f5d7" stroke="#6da262" stroke-width="2"/><text x="135" y="424" class="card">Remote sensing ｜ 遥感影像</text><text x="135" y="451" class="card-sub">Landsat · Sentinel-2 · local imagery</text>
+    <rect x="108" y="496" width="364" height="86" rx="10" fill="#e6f5d7" stroke="#6da262" stroke-width="2"/><text x="135" y="532" class="card">ENVI / PyTorch ｜ 土地利用分类</text><text x="135" y="559" class="card-sub">ROI supervision · trained model · OA/F1/IoU</text>
+    <rect x="108" y="604" width="364" height="86" rx="10" fill="#e6f5d7" stroke="#6da262" stroke-width="2"/><text x="135" y="640" class="card">PLUS ｜ 情景模拟</text><text x="135" y="667" class="card-sub">ND · UD · EP · RE / w.dat or subsidence raster</text>
+    <rect x="108" y="712" width="364" height="86" rx="10" fill="#e6f5d7" stroke="#6da262" stroke-width="2"/><text x="135" y="748" class="card">InVEST ｜ 生态系统服务</text><text x="135" y="775" class="card-sub">Carbon · Water Yield · Habitat Quality</text>
+    <rect x="108" y="820" width="364" height="86" rx="10" fill="#e6f5d7" stroke="#6da262" stroke-width="2"/><text x="135" y="856" class="card">ArcGIS Pro ｜ 空间制图</text><text x="135" y="883" class="card-sub">30 m grid · layout · PDF/PNG · QA</text>
+    <rect x="108" y="928" width="364" height="50" rx="10" fill="#fff2cf" stroke="#d79e3f" stroke-width="2"/><text x="290" y="960" text-anchor="middle" font-size="17" font-weight="700" fill="#93611b">Local-first MCP · 本地软件受控执行</text>
+  </g>
+  <g class="sans">
+    <g filter="url(#shadow)">
+      <circle cx="592" cy="418" r="28" fill="#8cd6dc" stroke="#27747a" stroke-width="2"/><text x="592" y="427" text-anchor="middle" font-size="25" font-weight="800" fill="#fff">1</text>
+      <rect x="635" y="380" width="570" height="76" rx="10" fill="url(#stage)" stroke="#2f7a79" stroke-width="2"/><text x="665" y="413" class="stage">Project setup &amp; preflight ｜ 项目输入与空间预检</text><text x="665" y="438" class="sub">CRS · NoData · resolution · 30 m master grid · data contract</text>
+      <rect x="635" y="469" width="570" height="48" rx="8" fill="#eff9e8" stroke="#87ae7e" stroke-width="2"/><text x="920" y="500" text-anchor="middle" class="tiny">Imagery · ROI/model · boundary · drivers · carbon table · w.dat</text>
+    </g>
+    <path d="M900 518V546" stroke="#2f7a79" stroke-width="3" marker-end="url(#arrow)"/>
+    <g filter="url(#shadow)">
+      <circle cx="592" cy="580" r="28" fill="#8cd6dc" stroke="#27747a" stroke-width="2"/><text x="592" y="589" text-anchor="middle" font-size="25" font-weight="800" fill="#fff">2</text>
+      <rect x="635" y="542" width="570" height="76" rx="10" fill="url(#stage)" stroke="#2f7a79" stroke-width="2"/><text x="665" y="575" class="stage">Multi-period LULC ｜ 多期土地利用制图</text><text x="665" y="600" class="sub">ENVI classification / PyTorch inference · accuracy assessment</text>
+      <rect x="635" y="631" width="570" height="48" rx="8" fill="#eff9e8" stroke="#87ae7e" stroke-width="2"/><text x="920" y="662" text-anchor="middle" class="tiny">LULC_Year.tif · confidence · confusion matrix · OA / Macro-F1 / IoU</text>
+    </g>
+    <path d="M900 680V708" stroke="#2f7a79" stroke-width="3" marker-end="url(#arrow)"/>
+    <g filter="url(#shadow)">
+      <circle cx="592" cy="742" r="28" fill="#8cd6dc" stroke="#27747a" stroke-width="2"/><text x="592" y="751" text-anchor="middle" font-size="25" font-weight="800" fill="#fff">3</text>
+      <rect x="635" y="704" width="570" height="76" rx="10" fill="url(#stage)" stroke="#2f7a79" stroke-width="2"/><text x="665" y="737" class="stage">Change &amp; PLUS scenarios ｜ 转移与四情景</text><text x="665" y="762" class="sub">Sankey · ND / UD / EP / RE · subsidence depth as RE core driver</text>
+      <rect x="635" y="793" width="570" height="48" rx="8" fill="#eff9e8" stroke="#87ae7e" stroke-width="2"/><text x="920" y="824" text-anchor="middle" class="tiny">Transition matrix · PLUS_ND/UD/EP/RE.tif · FoM · stability</text>
+    </g>
+    <path d="M900 842V870" stroke="#2f7a79" stroke-width="3" marker-end="url(#arrow)"/>
+    <g filter="url(#shadow)">
+      <circle cx="592" cy="904" r="28" fill="#8cd6dc" stroke="#27747a" stroke-width="2"/><text x="592" y="913" text-anchor="middle" font-size="25" font-weight="800" fill="#fff">4</text>
+      <rect x="635" y="866" width="570" height="76" rx="10" fill="url(#stage)" stroke="#2f7a79" stroke-width="2"/><text x="665" y="899" class="stage">Ecosystem services ｜ 碳储与生态服务评价</text><text x="665" y="924" class="sub">InVEST Carbon · Water Yield · Habitat · Min-Max / AHP · sensitivity</text>
+      <rect x="635" y="955" width="570" height="48" rx="8" fill="#eff9e8" stroke="#87ae7e" stroke-width="2"/><text x="920" y="986" text-anchor="middle" class="tiny">Carbon storage · water supply · habitat quality · integrated score</text>
+    </g>
+  </g>
+  <g class="sans" filter="url(#shadow)">
+    <rect x="1328" y="388" width="364" height="92" rx="10" fill="#f5fff1" stroke="#63a55d" stroke-width="2"/><text x="1356" y="425" class="output">LULC Maps ｜ 土地利用图</text><text x="1356" y="453" class="output-sub">Multi-year raster · class areas · accuracy report</text>
+    <rect x="1328" y="502" width="364" height="92" rx="10" fill="#f5fff1" stroke="#63a55d" stroke-width="2"/><text x="1356" y="539" class="output">Sankey &amp; Transitions ｜ 转移图</text><text x="1356" y="567" class="output-sub">Conversion matrix · flow diagram · change statistics</text>
+    <rect x="1328" y="616" width="364" height="92" rx="10" fill="#f5fff1" stroke="#63a55d" stroke-width="2"/><text x="1356" y="653" class="output">PLUS Forecasts ｜ 四情景预测图</text><text x="1356" y="681" class="output-sub">ND · UD · EP · RE · validated scenario maps</text>
+    <rect x="1328" y="730" width="364" height="92" rx="10" fill="#f5fff1" stroke="#63a55d" stroke-width="2"/><text x="1356" y="767" class="output">Ecosystem Maps ｜ 生态服务图</text><text x="1356" y="795" class="output-sub">Carbon · water yield · habitat · service score</text>
+    <rect x="1328" y="844" width="364" height="92" rx="10" fill="#f5fff1" stroke="#63a55d" stroke-width="2"/><text x="1356" y="881" class="output">Publication Package ｜ 可发表成果</text><text x="1356" y="909" class="output-sub">ArcGIS PDF/PNG · manifest · provenance · QA</text>
+    <rect x="1328" y="957" width="364" height="34" rx="8" fill="#fff2cf" stroke="#d79e3f" stroke-width="2"/><text x="1510" y="980" text-anchor="middle" font-size="15" font-weight="700" fill="#93611b">Automatic checks + human visual review</text>
+  </g>
+  <path d="M508 680H532M1268 680H1290" stroke="#2f7a79" stroke-width="4" marker-end="url(#arrow)"/>
+  <g class="sans" filter="url(#shadow)"><rect x="360" y="1066" width="1080" height="58" rx="12" fill="#f3a344"/><text x="900" y="1103" text-anchor="middle" font-size="22" font-weight="800" fill="#55350d">Local data stay local ｜ 本地数据、本地软件与可追溯科研成果</text></g>
+</svg>

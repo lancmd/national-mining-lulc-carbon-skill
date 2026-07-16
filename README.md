@@ -24,20 +24,9 @@ It is built for multi-period LULC, Sankey transitions, PLUS ND/UD/EP/RE scenario
 
 ## Workflow
 
-```mermaid
-flowchart LR
-    A[Local data] --> B[MAESA project compiler]
-    B --> C[Spatial preflight<br/>30 m master grid]
-    C --> D[LULC classification]
-    D --> E[Transition matrix<br/>Sankey and SVG maps]
-    D --> F[PLUS<br/>ND · UD · EP · RE]
-    F --> G[InVEST Carbon<br/>per scenario]
-    D --> H[InVEST<br/>Water Yield · Habitat]
-    G --> I[Ecological-service analysis]
-    H --> I
-    I --> J[ArcGIS Pro layout<br/>PDF · PNG]
-    J --> K[Manifest · provenance<br/>validation summary]
-```
+<p align="center">
+  <img src="assets/maesa-workflow.svg" alt="MAESA bilingual local-first workflow" width="100%" />
+</p>
 
 ## What ships today
 
