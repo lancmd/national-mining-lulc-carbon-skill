@@ -51,7 +51,7 @@ flowchart LR
 | Annual Water Yield / Habitat Quality | Local InVEST CLI and datastack contracts | Automatic when model parameters are supplied |
 | Subsidence-water volume and composite carbon | ArcPy | DEM, water level and vertical datum required |
 | Min-Max / AHP, trade-offs, sensitivity, comparison, GeoDetector | Python | Automatic |
-| Publication layouts | ArcGIS Pro `compose_layout` | Requires a local `.aprx`, layout and symbol rules |
+| Publication layouts | ArcGIS Pro `compose_layout` | Adds declared stage outputs, checks renderer categories and exports preview/PDF/PNG |
 
 `prepared`, `pending_validation` and `waiting_interactive` are intentional incomplete states; they are never reported as completed analysis.
 
@@ -90,14 +90,15 @@ MAESA is an **LLM-enabled agent product**, not a repository that trains model we
 
 - When used from Codex, Claude, Qwen or another Agent client, the host Agent is the LLM; MAESA provides the domain workflow and local tools.
 - For a standalone assistant, MAESA includes an optional Copilot adapter for a local Ollama model or an OpenAI-compatible endpoint.
-- The model plans and explains; the local MCP service remains the only path to desktop GIS tools.
+- The Copilot creates a constrained JSON execution plan, shows its inputs/steps/outputs, and calls only allowlisted local MCP tools after `--confirm`.
+- The local MCP service remains the only path to desktop GIS tools; an LLM never receives arbitrary shell-command authority.
 
 ```powershell
 Copy-Item .\config\llm_provider.example.json .\config\llm_provider.json
 python .\scripts\maesa_copilot.py --message "检查项目缺少哪些输入" --dry-run
 ```
 
-Read [LLM Copilot](docs/llm_copilot.md) before enabling a cloud endpoint or downloading a local model.
+Read [LLM Copilot](docs/llm_copilot.md) before enabling a cloud endpoint or downloading a local model. Choose a focused [task mode](docs/task_modes.md) when the project is not a full chain.
 
 ## Data handoff
 
@@ -134,7 +135,7 @@ Every project emits `outputs_manifest.json`, `provenance.json`, `validation_summ
 - PLUS — FoM, class accuracy and multi-seed stability;
 - InVEST — independent-run consistency where available;
 - ecosystem services — standardisation ranges, AHP consistency and sensitivity;
-- maps — layers, legend presence, extent and resolution.
+- maps — layers, renderer/category coverage, preview diagnostics, extent, resolution and a separate visual-review state.
 
 Run the portable suite before publishing a change:
 

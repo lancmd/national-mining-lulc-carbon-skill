@@ -194,15 +194,36 @@ class JobRunner:
         outputs = stage.get("outputs", [])
         return bool(outputs) and all(self.output_path(item).exists() for item in outputs)
 
+    def dependency_outputs(self, stage: dict[str, Any]) -> set[Path]:
+        """Return output paths promised by direct prerequisite stages.
+
+        This is used for final layouts: generated rasters do not exist while a
+        job is compiled, but they are valid inputs once their producer has
+        completed.  No arbitrary missing input is accepted; it must appear in
+        an explicit dependency's output contract.
+        """
+        by_id = {str(item.get("id")): item for item in self.job.get("stages", [])}
+        values: set[Path] = set()
+        for identifier in stage.get("depends_on", []):
+            parent = by_id.get(str(identifier), {})
+            for raw in parent.get("outputs", []) if isinstance(parent, dict) else []:
+                try:
+                    values.add(self.output_path(str(raw)))
+                except (OSError, PathSafetyError, TypeError):
+                    continue
+        return values
+
     def validate_stage(self, stage: dict[str, Any]) -> list[str]:
         errors = []
         if not stage.get("id") or not stage.get("adapter"):
             errors.append("stage requires id and adapter")
+        produced_by_dependency = self.dependency_outputs(stage)
         for value in stage.get("inputs", []):
             try:
                 path = self.stage_path(value)
-                if not (path.exists() and (path.is_relative_to(self.workspace) or any(
-                        path.is_relative_to(root) for root in self.input_roots))):
+                declared_generated = path in produced_by_dependency
+                if not (declared_generated or (path.exists() and (path.is_relative_to(self.workspace) or any(
+                        path.is_relative_to(root) for root in self.input_roots)))):
                     errors.append(f"missing or disallowed input: {value}")
             except (OSError, PathSafetyError, TypeError) as error:
                 errors.append(f"invalid input {value}: {error}")

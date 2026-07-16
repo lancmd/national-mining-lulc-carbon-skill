@@ -204,9 +204,13 @@ def validate_map(source: dict[str, Any]) -> dict[str, Any]:
     else:
         checks.append("layer completeness")
     if source.get("legend_accuracy") != 1:
-        errors.append("legend_accuracy must equal 1 after visual/symbol inspection")
+        errors.append("legend_accuracy must equal 1 after automatic symbol inspection")
     else:
-        checks.append("legend accuracy")
+        checks.append("legend symbol accuracy")
+    if source.get("automatic_layout_status") == "failed":
+        errors.extend(str(item) for item in source.get("automatic_layout_errors", []) or ["automatic layout inspection failed"])
+    elif source.get("automatic_layout_status") == "completed":
+        checks.append("automatic layout inspection")
     extent = source.get("extent")
     if not isinstance(extent, list) or len(extent) != 4 or not all(isinstance(value, (int, float)) and math.isfinite(value) for value in extent):
         errors.append("extent must contain four finite coordinates")
@@ -217,7 +221,11 @@ def validate_map(source: dict[str, Any]) -> dict[str, Any]:
         errors.append("resolution must be positive")
     else:
         checks.append("export resolution")
-    return section("failed" if errors else "completed", checks, errors)
+    if errors:
+        return section("failed", checks, errors)
+    if source.get("visual_review_status") != "completed":
+        return section("pending_validation", checks, ["map passed automatic checks but still needs visual review"])
+    return section("completed", checks + ["visual layout review"], [])
 
 
 def validate_results(validation_file: Path, output_report: Path | None = None) -> dict[str, Any]:

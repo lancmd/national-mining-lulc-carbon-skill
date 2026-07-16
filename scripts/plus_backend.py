@@ -90,7 +90,7 @@ def write_request_pack(envelope: dict[str, Any]) -> tuple[str, str]:
     # this generic request receipt separate prevents a resumed workflow from
     # erasing a live GUI PID and its completed-step checkpoint.
     state = workspace / "plus_backend_request_state.json"
-    state.write_text(json.dumps({"scenario": scenario, "status": "prepared", "request": str(pack),
+    state.write_text(json.dumps({"scenario": scenario, "status": "prepared", "lifecycle_status": "prepared", "request": str(pack),
                                  "expected_output": str(expected)}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return str(pack), str(state)
 
@@ -117,7 +117,7 @@ def adopt_existing_output(envelope: dict[str, Any]) -> dict[str, Any] | None:
         return response(envelope, "failed", error=f"PLUS {scenario} output is not a readable TIFF signature: {expected}")
     state = workspace / "plus_execution_state.json"
     workspace.mkdir(parents=True, exist_ok=True)
-    state.write_text(json.dumps({"scenario": scenario, "status": "completed", "adopted": True,
+    state.write_text(json.dumps({"scenario": scenario, "status": "completed", "lifecycle_status": "completed", "adopted": True,
                                  "expected_output": str(expected)}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return response(envelope, "completed", outputs=[str(expected)],
                     message="adopted an existing local PLUS scenario output")
@@ -144,7 +144,7 @@ def normalize_bridge_result(envelope: dict[str, Any], result: dict[str, Any]) ->
     result["outputs"] = [str(expected)]
     result.setdefault("message", "local PLUS scenario output accepted")
     (workspace / "plus_execution_state.json").write_text(json.dumps({"scenario": scenario, "status": "completed",
-        "adopted": False, "expected_output": str(expected)}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        "lifecycle_status": "completed", "adopted": False, "expected_output": str(expected)}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return result
 
 

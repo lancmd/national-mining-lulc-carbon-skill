@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MAESA controlled execution plan",
+  "type": "object",
+  "required": ["schema_version", "kind", "project_file", "purpose", "steps", "confirmation_required"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "maesa_controlled_execution_plan"},
+    "project_file": {"type": "string", "minLength": 1},
+    "purpose": {"type": "string", "minLength": 1},
+    "steps": {"type": "array", "minItems": 4},
+    "confirmation_required": {"const": true}
+  },
+  "additionalProperties": true
+}

@@ -243,8 +243,11 @@ def validate_local_project(project_file: str, backend: str = "project") -> str:
 
 @mcp.tool()
 def build_local_project_from_inputs(output_project: str, project_id: str, workspace: str,
-                                    imagery_periods: list[dict[str, Any]], driver_factors: dict[str, Any],
-                                    mine_boundary: str, carbon_density: str, w_dat: str | None = None,
+                                    task_type: str = "full_chain", imagery_periods: list[dict[str, Any]] | None = None,
+                                    historical_lulc_periods: list[dict[str, Any]] | None = None,
+                                    driver_factors: dict[str, Any] | None = None, mine_boundary: str | None = None,
+                                    carbon_density: str | None = None, ecosystem_criteria: str | None = None,
+                                    ecosystem_config: str | None = None, gis_outputs: dict[str, Any] | None = None, w_dat: str | None = None,
                                     model_package: str | None = None, training_roi: str | None = None,
                                     scheme: str = "high_water_coal_7class", w_dat_unit: str | None = None,
                                     w_dat_convention: str | None = None, workface_boundary: str | None = None,
@@ -252,14 +255,17 @@ def build_local_project_from_inputs(output_project: str, project_id: str, worksp
                                     backend: str = "project") -> str:
     """Build a local multi-date project from supplied paths.
 
-    Supply carbon_density.  For RE/subsidence use either a standardised
+    Select task_type so only the inputs for the requested work are required.
+    For RE/subsidence use either a standardised
     subsidence_depth_raster (the user-made settlement cloud) or w_dat with its
     unit, sign convention and bounded interpolation scope; not both.
     """
     return json_result(registry.call(backend, "project.build_from_inputs", {
         "output_project": output_project, "project_id": project_id, "workspace": workspace,
-        "imagery_periods": imagery_periods, "driver_factors": driver_factors, "mine_boundary": mine_boundary,
-        "carbon_density": carbon_density, "w_dat": w_dat, "model_package": model_package, "training_roi": training_roi,
+        "task_type": task_type, "imagery_periods": imagery_periods, "historical_lulc_periods": historical_lulc_periods,
+        "driver_factors": driver_factors, "mine_boundary": mine_boundary, "carbon_density": carbon_density,
+        "ecosystem_criteria": ecosystem_criteria, "ecosystem_config": ecosystem_config, "gis_outputs": gis_outputs,
+        "w_dat": w_dat, "model_package": model_package, "training_roi": training_roi,
         "scheme": scheme, "w_dat_unit": w_dat_unit, "w_dat_convention": w_dat_convention,
         "workface_boundary": workface_boundary, "w_dat_max_distance_m": w_dat_max_distance_m,
         "subsidence_depth_raster": subsidence_depth_raster,

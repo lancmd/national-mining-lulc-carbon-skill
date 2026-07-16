@@ -48,13 +48,40 @@ def output_path(value: str, workspace: Path) -> str:
     return str(resolve_output(value, workspace))
 
 
-def map_layer_definition(value: dict[str, Any], base: Path) -> dict[str, Any]:
-    """Resolve map resource paths relative to project.json before ArcGIS changes cwd."""
+def map_layer_definition(value: dict[str, Any], base: Path, workspace: Path,
+                         declared_stages: dict[str, dict[str, Any]]) -> tuple[dict[str, Any], str | None]:
+    """Resolve an external layer or a result declared by an earlier stage.
+
+    A stage output is deliberately not required to exist while ``project.json``
+    is being checked.  The compiler instead proves that its producer has
+    declared it, and the workflow runner checks the file immediately before the
+    ArcGIS layout stage starts.
+    """
     result = dict(value)
-    for key in ("path", "symbology_layer"):
-        if result.get(key):
-            result[key] = source_path(result[key], base)
-    return result
+    source = result.get("source", "input")
+    producer: str | None = None
+    if source == "stage_output":
+        producer = str(result.get("stage_id", ""))
+        index = result.get("output_index", 0)
+        stage = declared_stages.get(producer)
+        outputs = stage.get("outputs", []) if isinstance(stage, dict) else []
+        if not stage:
+            raise ValueError(f"map layer references unknown stage_id: {producer}")
+        if not isinstance(index, int) or index < 0 or index >= len(outputs):
+            raise ValueError(f"map layer references unavailable output_index {index} from stage {producer}")
+        result["path"] = str(outputs[index])
+    elif source == "input":
+        if result.get("path_scope") == "workspace" or result.get("generated") is True:
+            result["path"] = output_path(str(result["path"]), workspace)
+        elif result.get("path"):
+            result["path"] = source_path(result["path"], base)
+    else:
+        raise ValueError("map layer source must be input or stage_output")
+    if result.get("symbology_layer"):
+        result["symbology_layer"] = source_path(result["symbology_layer"], base)
+    result.pop("source", None); result.pop("stage_id", None); result.pop("output_index", None)
+    result.pop("path_scope", None); result.pop("generated", None)
+    return result, producer
 
 
 def carbon_datastack(lulc: str, carbon_table: str, output: Path) -> str:
@@ -738,10 +765,18 @@ def compile_workflow(project_path: Path, output_job: Path | None = None) -> dict
 
     completed = [stage["id"] for stage in stages if stage.get("enabled")]
     if gis_outputs.get("enabled"):
-        map_layers = [map_layer_definition(item, base) for item in gis_outputs.get("layers", [])]
+        declared_stages = {str(stage["id"]): stage for stage in stages if stage.get("enabled")}
+        resolved_layers = [map_layer_definition(item, base, workspace, declared_stages)
+                           for item in gis_outputs.get("layers", [])]
+        map_layers = [item[0] for item in resolved_layers]
+        for layer in map_layers:
+            if layer.get("kind") == "lulc" and not layer.get("expected_codes"):
+                layer["expected_codes"] = allowed_codes(classification.get("scheme", "standard_6class"))
+        generated_layer_dependencies = [item[1] for item in resolved_layers if item[1]]
         map_validation = str(workspace / "validation" / "map_layout.json")
         map_aprx = output_path(gis_outputs.get("aprx_output", "outputs/maps/composed_project.aprx"), workspace)
-        map_outputs = [map_aprx, map_validation]
+        map_preview = output_path(gis_outputs.get("preview_png", "outputs/maps/layout_preview.png"), workspace)
+        map_outputs = [map_aprx, map_validation, map_preview]
         if gis_outputs.get("pdf"):
             map_outputs.append(output_path(gis_outputs["pdf"], workspace))
         if gis_outputs.get("png"):
@@ -758,11 +793,13 @@ def compile_workflow(project_path: Path, output_job: Path | None = None) -> dict
             "layers": map_layers, "title_text": gis_outputs.get("title_text"), "legend_name": gis_outputs.get("legend_name"),
             "pdf": output_path(gis_outputs["pdf"], workspace) if gis_outputs.get("pdf") else None,
             "png": output_path(gis_outputs["png"], workspace) if gis_outputs.get("png") else None, "resolution": gis_outputs.get("resolution", 300),
-            "validation_output": map_validation}]}
+            "preview_png": map_preview, "visual_confirmation": bool(gis_outputs.get("visual_confirmation", False)),
+            "require_north_arrow": bool(gis_outputs.get("require_north_arrow", False)),
+            "require_scale_bar": bool(gis_outputs.get("require_scale_bar", False)), "validation_output": map_validation}]}
         spec_path = workspace / "generated" / "compose_layout.json"; write_json(spec_path, spec)
         stages.append({"id": "map_layout", "adapter": "arcgis", "enabled": True, "spec": str(spec_path),
                        "inputs": map_inputs, "outputs": map_outputs,
-                       "depends_on": completed.copy()})
+                       "depends_on": sorted(set(completed + generated_layer_dependencies))})
         completed.append("map_layout")
     if validation_config.get("enabled"):
         inferred_sections = [name for name, enabled in (("lulc", classification.get("enabled")), ("plus", plus.get("enabled")),

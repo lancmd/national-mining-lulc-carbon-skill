@@ -14,6 +14,12 @@ from plus_contract import re_contract_errors
 from spatial_contract import parse_driver_factors
 
 
+VALID_TASK_TYPES = {
+    "classification_only", "lulc_change_analysis", "plus_only", "invest_only",
+    "ecosystem_service_only", "mapping_only", "full_chain",
+}
+
+
 REQUIRED_CARBON_COLUMNS = {"lucode", "c_above", "c_below", "c_soil", "c_dead"}
 VALID_ENGINES = {"envi", "pytorch", "provided_lulc"}
 VALID_ECOSYSTEM_METHODS = {"minmax", "ahp"}
@@ -167,6 +173,32 @@ def validate(project_path: Path) -> dict[str, Any]:
     ecosystem = project.get("ecosystem_service", {})
     gis_outputs = project.get("gis_outputs", {})
     validation = project.get("validation", {})
+    task_type = project.get("task_type")
+    if task_type is not None and task_type not in VALID_TASK_TYPES:
+        errors.append("task_type must be one of " + ", ".join(sorted(VALID_TASK_TYPES)))
+
+    # A task type is optional for backwards compatibility.  When present it
+    # prevents the builder from silently compiling unrelated software stages.
+    if task_type in VALID_TASK_TYPES:
+        expected_modules = {
+            "classification_only": {"classification": True, "plus": False, "invest": False, "ecosystem": False, "gis": False},
+            "lulc_change_analysis": {"classification": False, "plus": False, "invest": False, "ecosystem": False, "gis": False},
+            "plus_only": {"classification": False, "plus": True, "invest": False, "ecosystem": False, "gis": False},
+            "invest_only": {"classification": False, "plus": False, "invest": True, "ecosystem": False, "gis": False},
+            "ecosystem_service_only": {"classification": False, "plus": False, "invest": False, "ecosystem": True, "gis": False},
+            "mapping_only": {"classification": False, "plus": False, "invest": False, "ecosystem": False, "gis": True},
+        }.get(task_type)
+        if expected_modules:
+            actual_modules = {"classification": bool(classification.get("enabled")), "plus": bool(plus.get("enabled")),
+                              "invest": bool(invest.get("enabled")), "ecosystem": bool(ecosystem.get("enabled")),
+                              "gis": bool(gis_outputs.get("enabled"))}
+            for name, expected in expected_modules.items():
+                if actual_modules[name] != expected:
+                    errors.append(f"task_type {task_type} requires {name}.enabled={str(expected).lower()}")
+        elif task_type == "full_chain":
+            for name, payload in (("classification", classification), ("plus", plus), ("invest", invest)):
+                if not payload.get("enabled"):
+                    errors.append(f"task_type full_chain requires {name}.enabled=true")
 
     if classification.get("enabled"):
         engine = classification.get("engine")
@@ -401,7 +433,32 @@ def validate(project_path: Path) -> dict[str, Any]:
                 if not isinstance(layer, dict):
                     errors.append(f"gis_outputs.layers[{index}] must be an object")
                     continue
-                required_path(f"gis_outputs.layers[{index}].path", layer.get("path"), base, input_roots, errors)
+                source = layer.get("source", "input")
+                if source == "stage_output":
+                    stage_id, output_index = layer.get("stage_id"), layer.get("output_index", 0)
+                    if not isinstance(stage_id, str) or not stage_id.strip():
+                        errors.append(f"gis_outputs.layers[{index}].stage_id is required for source=stage_output")
+                    if not isinstance(output_index, int) or output_index < 0:
+                        errors.append(f"gis_outputs.layers[{index}].output_index must be a non-negative integer")
+                elif source == "input":
+                    scope = layer.get("path_scope", "input")
+                    if scope == "workspace" or layer.get("generated") is True:
+                        value = layer.get("path")
+                        if not isinstance(value, str) or not value:
+                            errors.append(f"gis_outputs.layers[{index}].path is required for workspace output")
+                        else:
+                            try:
+                                raw = Path(value).expanduser()
+                                candidate = raw.resolve() if raw.is_absolute() else (workspace / raw).resolve()
+                                require_within(candidate, [workspace], f"gis_outputs.layers[{index}].path")
+                            except PathSafetyError as error:
+                                errors.append(str(error))
+                    elif scope == "input":
+                        required_path(f"gis_outputs.layers[{index}].path", layer.get("path"), base, input_roots, errors)
+                    else:
+                        errors.append(f"gis_outputs.layers[{index}].path_scope must be input or workspace")
+                else:
+                    errors.append(f"gis_outputs.layers[{index}].source must be input or stage_output")
                 if layer.get("symbology_layer"):
                     optional_path(f"gis_outputs.layers[{index}].symbology_layer", layer.get("symbology_layer"), base, input_roots, errors)
 

@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
     "project_conditional_inputs_smoke.py", "project_builder_smoke.py", "project_workflow_smoke.py", "plus_re_contract_smoke.py",
     "envi_backend_smoke.py",
     "maesa_copilot_smoke.py",
+    "project_task_modes_smoke.py", "stage_output_mapping_smoke.py",
     "plus_output_contract_smoke.py", "plus_v142_profile_smoke.py", "plus_bridge_state_isolation_smoke.py", "plus_chain_compile_smoke.py",
     "prepare_plus_scenarios_smoke.py",
     "invest_multimodel_compile_smoke.py",

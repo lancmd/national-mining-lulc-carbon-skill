@@ -31,8 +31,11 @@ def main() -> int:
     elif envelope.get("operation") == "project.build_from_inputs":
         params = envelope["parameters"]
         report = build_project(Path(params["output_project"]), params["project_id"], params["workspace"],
-                               params["imagery_periods"], params["driver_factors"], params["mine_boundary"],
-                               params["carbon_density"], w_dat=params.get("w_dat"), model_package=params.get("model_package"),
+                               params.get("imagery_periods"), params.get("driver_factors"), params.get("mine_boundary"),
+                               params.get("carbon_density"), task_type=params.get("task_type", "full_chain"),
+                               historical_lulc_periods=params.get("historical_lulc_periods"),
+                               ecosystem_criteria=params.get("ecosystem_criteria"), ecosystem_config=params.get("ecosystem_config"),
+                               gis_outputs=params.get("gis_outputs"), w_dat=params.get("w_dat"), model_package=params.get("model_package"),
                                training_roi=params.get("training_roi"), scheme=params.get("scheme", "high_water_coal_7class"),
                                w_dat_unit=params.get("w_dat_unit"), w_dat_convention=params.get("w_dat_convention"),
                                workface_boundary=params.get("workface_boundary"),

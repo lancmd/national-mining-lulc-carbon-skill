@@ -37,6 +37,10 @@ PINNED_COMMIT = "de7ba6efd35b530da6c37e81103276a17716602c"
 PINNED_EXECUTABLE = "PLUS V1.4.2.exe"
 PINNED_SHA256 = "2f49f4f01c0a209d0d67fabef9013d41fca30b1632e334898abadad5c2eb25d4"
 VALID_SCENARIOS = {"ND", "UD", "EP", "RE"}
+GUI_LIFECYCLE_STATES = {
+    "prepared", "calibration_required", "waiting_uac", "running_gui", "waiting_export",
+    "output_detected", "validated", "completed",
+}
 
 
 class GuiAutomationError(RuntimeError):
@@ -59,6 +63,16 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     temporary.replace(path)
+
+
+def transition(state: dict[str, Any], lifecycle_status: str, **values: Any) -> None:
+    """Persist a compact lifecycle audit trail beside the resumable GUI state."""
+    if lifecycle_status not in GUI_LIFECYCLE_STATES:
+        raise ValueError(f"unsupported PLUS GUI lifecycle state: {lifecycle_status}")
+    history = state.setdefault("lifecycle_history", [])
+    if not history or history[-1].get("state") != lifecycle_status:
+        history.append({"state": lifecycle_status, "at": time.time()})
+    state.update({"lifecycle_status": lifecycle_status, **values})
 
 
 def load_local_paths() -> dict[str, Any]:
@@ -273,6 +287,14 @@ def elevated_worker(envelope: dict[str, Any]) -> dict[str, Any]:
     """
     workspace = worker_workspace(envelope)
     workspace.mkdir(parents=True, exist_ok=True)
+    if envelope.get("operation") == "plus.run_scenario":
+        scenario, _, expected, _, state_path = scenario_paths(envelope)
+        prior = read_json(state_path, {})
+        if not isinstance(prior, dict):
+            prior = {"bridge": BRIDGE_NAME, "software": SOFTWARE_NAME, "scenario": scenario,
+                     "expected_output": str(expected)}
+        transition(prior, "waiting_uac", status="waiting_interactive", uac_requested_at=time.time())
+        write_json(state_path, prior)
     request_id = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(envelope.get("request_id") or "plus"))
     request = workspace / f"plus_v142_elevated_request_{request_id}.json"
     reply = workspace / f"plus_v142_elevated_response_{request_id}.json"
@@ -286,6 +308,7 @@ def elevated_worker(envelope: dict[str, Any]) -> dict[str, Any]:
                                  encoding="utf-8", errors="replace", timeout=180, check=False)
     except subprocess.TimeoutExpired:
         return response(envelope, "waiting_interactive", outputs=[str(request), str(reply)],
+                        lifecycle_status="waiting_uac",
                         message="waiting for the local elevated HPSCIL PLUS worker; approve the Windows UAC prompt if it is visible")
     if reply.is_file():
         result = read_json(reply, {})
@@ -600,9 +623,10 @@ def stable_output(expected: Path) -> bool:
 def initial_state(scenario: str, expected: Path, identity: dict[str, Any], profile_file: Path | None,
                   profile_digest: str | None) -> dict[str, Any]:
     return {"bridge": BRIDGE_NAME, "software": SOFTWARE_NAME, "scenario": scenario, "status": "prepared",
+            "lifecycle_status": "prepared", "lifecycle_states": sorted(GUI_LIFECYCLE_STATES),
             "expected_output": str(expected), "executable_identity": identity,
             "profile": str(profile_file) if profile_file else None, "profile_sha256": profile_digest,
-            "completed_steps": [], "attempts": 0}
+            "completed_steps": [], "attempts": 0, "lifecycle_history": [{"state": "prepared", "at": time.time()}]}
 
 
 def write_request(envelope: dict[str, Any], identity: dict[str, Any], dry_run: bool) -> tuple[str, Path, Path, Path, dict[str, Any]]:
@@ -617,7 +641,9 @@ def write_request(envelope: dict[str, Any], identity: dict[str, Any], dry_run: b
     # it with the requested profile before deciding whether saved GUI steps can
     # safely be reused after an interruption.
     state.update({"expected_output": str(expected), "profile": str(profile_file) if profile_file else None,
-                  "requested_profile_sha256": digest, "dry_run": dry_run})
+                  "requested_profile_sha256": digest, "dry_run": dry_run, "request_file": str(request),
+                  "input_files": [str(item) for item in request_context(envelope, scenario, workspace, expected).values()
+                                  if isinstance(item, str) and item and item != str(expected)]})
     write_json(request, {"bridge": BRIDGE_NAME, "software": SOFTWARE_NAME, "scenario": scenario,
                          "request": envelope, "expected_output": str(expected), "identity": identity,
                          "profile": str(profile_file) if profile_file else None, "profile_sha256": digest})
@@ -643,6 +669,7 @@ def capabilities(envelope: dict[str, Any]) -> dict[str, Any]:
         "profile": str(profile_file) if profile_file else None,
         "profile_calibrated": bool(profile.get("calibrated") is True and scenario_steps(profile, "ND")),
         "operations": ["system.capabilities", "plus.calibrate", "plus.run_scenario"],
+        "lifecycle_states": sorted(GUI_LIFECYCLE_STATES),
         "limitations": ["The first run needs a local, version-specific UI calibration profile.",
                         "completed is returned only after the contracted GeoTIFF is written and passes grid checks."],
     })
@@ -708,6 +735,7 @@ def calibrate(envelope: dict[str, Any]) -> dict[str, Any]:
     report_path = artifact_dir / f"plus_v142_calibration{suffix}.json"
     write_json(report_path, report)
     return response(envelope, "waiting_interactive", outputs=[str(report_path)], process_id=process_id,
+                    lifecycle_status="calibration_required",
                     message="official HPSCIL PLUS calibration report was written; update the local UI profile, then resume or close the window")
 
 
@@ -719,21 +747,25 @@ def run_scenario(envelope: dict[str, Any]) -> dict[str, Any]:
     detail = detail if isinstance(detail, dict) else {}
     history = [item for item in detail.get("historical_lulc", []) if isinstance(item, str)]
     if stable_output(expected):
+        transition(state, "output_detected", status="running", output_detected_at=time.time())
+        write_json(state_path, state)
         validation = output_validation(expected, history[-1] if history else None)
-        state.update({"status": "completed", "validation": validation, "completed_at": time.time()})
+        transition(state, "validated", status="running", validation_status="validated", validation=validation,
+                   validated_at=time.time())
+        transition(state, "completed", status="completed", completed_at=time.time())
         write_json(state_path, state)
         return response(envelope, "completed", outputs=[str(expected), validation["report"]],
                         result={"landuse_raster": str(expected), "validation": validation},
-                        message="existing contracted HPSCIL PLUS output passed validation")
+                        lifecycle_status="completed", message="existing contracted HPSCIL PLUS output passed validation")
     if dry_run:
         return response(envelope, "prepared", outputs=[str(workspace / f"plus_v142_gui_request_{scenario}.json"), str(state_path)],
-                        message="official HPSCIL PLUS request and per-scenario GUI state prepared (dry run)")
+                        lifecycle_status="prepared", message="official HPSCIL PLUS request and per-scenario GUI state prepared (dry run)")
     profile_file = profile_path()
     profile, digest = load_profile(profile_file)
     previous_pid = state.get("process_id")
     same_profile = state.get("profile_sha256") == digest
     if pid_is_alive(previous_pid) and not same_profile:
-        state.update({"status": "waiting_interactive", "reason": "ui_profile_changed_while_gui_running",
+        state.update({"status": "waiting_interactive", "lifecycle_status": "calibration_required", "reason": "ui_profile_changed_while_gui_running",
                       "process_id": previous_pid, "updated_at": time.time()})
         write_json(state_path, state)
         return response(envelope, "waiting_interactive", outputs=[str(state_path)], process_id=previous_pid,
@@ -752,7 +784,8 @@ def run_scenario(envelope: dict[str, Any]) -> dict[str, Any]:
                       "resume_mode": "restarted_gui", "completed_steps": []})
         time.sleep(min(float(profile.get("startup_wait_seconds", 2)) if profile else 2, 15))
     artifact_dir = workspace / "plus_v142_gui_artifacts"
-    state.update({"status": "running", "process_id": process_id, "profile_sha256": digest, "updated_at": time.time()})
+    transition(state, "running_gui", status="running", process_id=process_id, profile_sha256=digest,
+               started_at=state.get("started_at", time.time()), updated_at=time.time())
     write_json(state_path, state)
     try:
         gui = PlusGui(process_id, profile, profile_file, artifact_dir)
@@ -761,36 +794,40 @@ def run_scenario(envelope: dict[str, Any]) -> dict[str, Any]:
             calibration = gui.calibration()
             calibration_path = artifact_dir / "plus_v142_calibration.json"
             write_json(calibration_path, calibration)
-            state.update({"status": "waiting_interactive", "reason": "ui_profile_not_calibrated",
+            state.update({"status": "waiting_interactive", "lifecycle_status": "calibration_required", "reason": "ui_profile_not_calibrated",
                           "calibration": str(calibration_path), "process_id": process_id})
             write_json(state_path, state)
             return response(envelope, "waiting_interactive", outputs=[str(state_path), str(calibration_path), calibration["screenshot"]],
                             process_id=process_id, message="HPSCIL PLUS window is ready; calibrate config/plus_v142_ui_profile.json from the saved local control report, then resume")
         completed = list(state.get("completed_steps", [])) if same_profile else []
         def persist(done: list[str], current: str | None) -> None:
-            state.update({"status": "running", "process_id": process_id, "completed_steps": done,
+            state.update({"status": "running", "lifecycle_status": "running_gui", "process_id": process_id, "completed_steps": done,
                           "current_step": current, "updated_at": time.time()})
             write_json(state_path, state)
         events = execute_steps(gui, steps, request_context(envelope, scenario, workspace, expected), completed, persist)
         screenshot = gui.capture("plus_v142_after_automation")
         state.update({"completed_steps": completed, "automation_events": events, "screenshot": str(screenshot)})
     except Exception as caught:
-        state.update({"status": "waiting_interactive", "reason": "gui_automation_needs_calibration", "error": str(caught),
+        state.update({"status": "waiting_interactive", "lifecycle_status": "calibration_required", "reason": "gui_automation_needs_calibration", "error": str(caught),
                       "process_id": process_id, "updated_at": time.time()})
         write_json(state_path, state)
         return response(envelope, "waiting_interactive", outputs=[str(state_path)], process_id=process_id,
                         message=f"HPSCIL PLUS GUI needs local calibration or attention: {caught}")
     if stable_output(expected):
+        transition(state, "output_detected", status="running", output_detected_at=time.time())
+        write_json(state_path, state)
         validation = output_validation(expected, history[-1] if history else None)
-        state.update({"status": "completed", "validation": validation, "completed_at": time.time()})
+        transition(state, "validated", status="running", validation_status="validated", validation=validation,
+                   validated_at=time.time())
+        transition(state, "completed", status="completed", completed_at=time.time())
         write_json(state_path, state)
         return response(envelope, "completed", outputs=[str(expected), validation["report"]],
                         result={"landuse_raster": str(expected), "validation": validation},
-                        message="HPSCIL PLUS GUI automation produced and validated the contracted output")
-    state.update({"status": "waiting_interactive", "reason": "awaiting_contracted_output", "updated_at": time.time()})
+                        lifecycle_status="completed", message="HPSCIL PLUS GUI automation produced and validated the contracted output")
+    transition(state, "waiting_export", status="waiting_interactive", reason="awaiting_contracted_output", updated_at=time.time())
     write_json(state_path, state)
     return response(envelope, "waiting_interactive", outputs=[str(state_path)], process_id=process_id,
-                    message="HPSCIL PLUS GUI steps were submitted; resume after the contracted GeoTIFF is available")
+                    lifecycle_status="waiting_export", message="HPSCIL PLUS GUI steps were submitted; resume after the contracted GeoTIFF is available")
 
 
 def handle(envelope: dict[str, Any], *, elevated: bool) -> dict[str, Any]:

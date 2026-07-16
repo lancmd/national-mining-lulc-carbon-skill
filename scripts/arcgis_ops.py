@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -133,6 +134,75 @@ def layout_element(layout: Any, element_type: str, name: str | None) -> Any | No
     return elements[0] if elements else None
 
 
+def renderer_report(layer: Any, definition: dict[str, Any]) -> dict[str, Any]:
+    """Extract renderer categories without assuming a particular ArcGIS renderer.
+
+    Unique-value renderers are compared against configured LULC codes.  Stretch
+    and class-break renderers are recorded as continuous symbols so a project
+    can be audited even where no discrete legend is expected.
+    """
+    report: dict[str, Any] = {"layer": layer.name, "kind": definition.get("kind", "unknown"), "renderer": None,
+                              "categories": [], "expected_codes": definition.get("expected_codes")}
+    try:
+        renderer = layer.symbology.renderer
+        report["renderer"] = getattr(renderer, "type", type(renderer).__name__)
+        for group in getattr(renderer, "groups", []) or []:
+            for item in getattr(group, "items", []) or []:
+                values = getattr(item, "values", [])
+                report["categories"].append({"label": str(getattr(item, "label", "")),
+                                             "values": [[str(value) for value in row] if isinstance(row, (list, tuple)) else str(row)
+                                                        for row in values]})
+        for item in getattr(renderer, "classBreaks", []) or []:
+            report["categories"].append({"label": str(getattr(item, "label", "")),
+                                         "upper_bound": getattr(item, "upperBound", None)})
+    except Exception as caught:
+        report["error"] = str(caught)
+        return report
+    expected = definition.get("expected_codes")
+    if not isinstance(expected, list) or not expected:
+        report["symbol_status"] = "not_applicable" if definition.get("kind") == "continuous" else "pending_validation"
+        return report
+    serialized = json.dumps(report["categories"], ensure_ascii=False)
+    missing = [int(code) for code in expected if str(code) not in serialized]
+    report["missing_codes"] = missing
+    report["symbol_status"] = "completed" if not missing else "failed"
+    return report
+
+
+def preview_metrics(path: str) -> dict[str, Any]:
+    """Provide a small, reproducible raster preview diagnostic when Pillow exists."""
+    result: dict[str, Any] = {"path": path, "available": False}
+    try:
+        from PIL import Image  # type: ignore
+        with Image.open(path) as source:
+            image = source.convert("RGB")
+            result.update({"available": True, "width": image.width, "height": image.height})
+            sample = image.resize((min(256, image.width), min(256, image.height)))
+            pixels = list(sample.getdata())
+        counts = Counter(pixels)
+        total = max(1, len(pixels))
+        largest = max(counts.values()) / total
+        black = counts.get((0, 0, 0), 0) / total
+        result.update({"largest_solid_colour_ratio": largest, "black_pixel_ratio": black,
+                       "black_nodata_suspected": black >= 0.90,
+                       "status": "completed" if largest < 0.98 and black < 0.95 else "failed"})
+    except Exception as caught:
+        result["reason"] = str(caught)
+        result["status"] = "pending_validation"
+    return result
+
+
+def element_bounds_valid(layout: Any, element: Any | None) -> bool | None:
+    if element is None:
+        return None
+    try:
+        x, y = float(element.elementPositionX), float(element.elementPositionY)
+        width, height = float(element.elementWidth), float(element.elementHeight)
+        return x >= 0 and y >= 0 and x + width <= float(layout.pageWidth) and y + height <= float(layout.pageHeight)
+    except Exception:
+        return None
+
+
 def compose_layout(arcpy: Any, operation: dict[str, Any], workspace: Path) -> None:
     """Build an output copy of an APRX, add result layers, apply supplied symbols, and export a checked layout."""
     source_aprx = resolve(operation["aprx"], workspace)
@@ -150,6 +220,7 @@ def compose_layout(arcpy: Any, operation: dict[str, Any], workspace: Path) -> No
         raise RuntimeError("map not found for layout composition")
     target_map = maps[0]
     expected_layers: list[str] = []
+    layer_reports: list[dict[str, Any]] = []
     for definition in operation.get("layers", []):
         path = resolve(definition["path"], workspace)
         layer = target_map.addDataFromPath(path)
@@ -160,6 +231,8 @@ def compose_layout(arcpy: Any, operation: dict[str, Any], workspace: Path) -> No
             arcpy.management.ApplySymbologyFromLayer(layer, resolve(definition["symbology_layer"], workspace))
         if "visible" in definition:
             layer.visible = bool(definition["visible"])
+        layer_reports.append(renderer_report(layer, definition))
+    title = None
     if operation.get("title_text"):
         title = layout_element(layout, "TEXT_ELEMENT", operation.get("title_element_name"))
         if not title:
@@ -181,16 +254,42 @@ def compose_layout(arcpy: Any, operation: dict[str, Any], workspace: Path) -> No
     if operation.get("png"):
         png = resolve(operation["png"], workspace); ensure_parent(png)
         layout.exportToPNG(png, resolution=resolution); exports["png"] = png
+    preview = resolve(operation.get("preview_png", "outputs/maps/layout_preview.png"), workspace)
+    ensure_parent(preview)
+    layout.exportToPNG(preview, resolution=72)
+    exports["preview_png"] = preview
     actual_layers = [item.name for item in target_map.listLayers()]
     extent = None
     if frame:
         camera_extent = frame.camera.getExtent()
         extent = [camera_extent.XMin, camera_extent.YMin, camera_extent.XMax, camera_extent.YMax]
+    symbol_failures = [item["layer"] for item in layer_reports if item.get("symbol_status") == "failed"]
+    surrounds = [str(getattr(item, "name", "")) for item in layout.listElements("MAPSURROUND_ELEMENT")]
+    title_in_bounds = element_bounds_valid(layout, title if operation.get("title_text") else None)
+    preview_report = preview_metrics(preview)
+    automatic_errors: list[str] = []
+    if symbol_failures:
+        automatic_errors.append("renderer categories do not cover expected codes: " + ", ".join(symbol_failures))
+    if preview_report.get("status") == "failed":
+        automatic_errors.append("preview is almost entirely one colour; inspect extent, NoData, and layout framing")
+    if title_in_bounds is False:
+        automatic_errors.append("title element extends beyond the layout page")
+    if operation.get("require_north_arrow") and not any("north" in item.lower() for item in surrounds):
+        automatic_errors.append("required north arrow was not found")
+    if operation.get("require_scale_bar") and not any("scale" in item.lower() for item in surrounds):
+        automatic_errors.append("required scale bar was not found")
+    automatic_status = "completed" if not automatic_errors else "failed"
+    visual_status = "completed" if operation.get("visual_confirmation") is True else "pending_validation"
     report = {
         "aprx": output_aprx, "layout": layout.name, "map": target_map.name,
         "expected_layers": expected_layers, "actual_layers": actual_layers,
         "missing_layers": sorted(set(expected_layers) - set(actual_layers)),
-        "legend_present": bool(legend), "legend_requires_visual_check": True,
+        "legend_present": bool(legend), "layer_symbol_checks": layer_reports,
+        "legend_accuracy": 1 if bool(legend) and not symbol_failures else 0,
+        "automatic_layout_status": automatic_status, "automatic_layout_errors": automatic_errors,
+        "preview": preview_report, "title_in_page_bounds": title_in_bounds,
+        "map_surround_elements": surrounds, "visual_review_status": visual_status,
+        "legend_requires_visual_check": visual_status != "completed",
         "extent": extent, "resolution": resolution, "exports": exports,
     }
     validation_output = resolve(operation["validation_output"], workspace)

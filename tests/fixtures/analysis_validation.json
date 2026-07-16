@@ -5,6 +5,8 @@
     "plus": {"fom": 0.21, "classes": {"water": {"f1": 0.8, "iou": 0.67}}, "seed_metrics": [{"seed": 11, "fom": 0.21}, {"seed": 22, "fom": 0.2}, {"seed": 33, "fom": 0.22}]},
     "invest": {"workflow_total_t_c": 1000.0, "independent_total_t_c": 1000.5, "relative_tolerance": 0.001},
     "ecosystem": {"method": "ahp", "normalised_ranges": {"carbon": [0.0, 1.0]}, "ahp_consistency_ratio": 0.03, "sensitivity": {"available": true, "maximum_rank_shift": 0, "weight_delta": 0.1}},
-    "map": {"expected_layers": ["LULC"], "actual_layers": ["LULC"], "legend_accuracy": 1, "extent": [0, 0, 1, 1], "resolution": 300}
+    "map": {"expected_layers": ["LULC"], "actual_layers": ["LULC"], "legend_accuracy": 1,
+      "automatic_layout_status": "completed", "automatic_layout_errors": [], "visual_review_status": "completed",
+      "extent": [0, 0, 1, 1], "resolution": 300}
   }
 }
