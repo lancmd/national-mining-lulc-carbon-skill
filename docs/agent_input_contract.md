@@ -9,7 +9,7 @@
 - 碳密度 CSV；
 - PLUS 驱动因子，其中 DEM 可自动派生坡度和坡向；
 - 用户自行由概率积分法或其他预测软件生成的沉陷云图 GeoTIFF（推荐），或 `w.dat`；二者二选一；
-- 分类所需的二选一输入：已验证的 PyTorch 模型包，或 ENVI ROI 样本。
+- 分类所需的二选一输入：已验证的 PyTorch 语义分割模型包，或 ENVI ROI 样本。已登记的 ResNet-50 图块分类器可用于 `classification_only`；在独立验证前不能作为 PLUS/InVEST 主链的逐像元 LULC 输入。
 
 构建器会生成 `inputs.imagery_periods`。运行时依次产生每期 LULC、相邻期转移 CSV 和 Sankey SVG、统一网格的驱动因子、ND/UD/EP/RE 请求和输出验证、各情景 InVEST Carbon 结果及其成果清单。每个分类图、PLUS 情景图和 InVEST 栅格还会生成不依赖 `.aprx` 的 SVG 主题图（标题、图例、CRS 和显示分辨率）；如有现成的 ArcGIS Pro 布局，可继续启用 `gis_outputs` 输出出版级 PDF/PNG。
 

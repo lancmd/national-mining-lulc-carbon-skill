@@ -187,12 +187,18 @@ def add_preflight(stages: list[dict[str, Any]], workspace: Path, inputs: dict[st
         image_spec: dict[str, Any] = {"name": master, "path": imagery[-1], "kind": "continuous", "must_align": False}
         if classification.get("engine") == "pytorch" and inputs.get("model_package"):
             try:
-                model = read_json(Path(source_path(inputs["model_package"], base)) / "model_config.json")
-                model_input = model.get("input", {})
-                image_spec.update({"expected_band_count": len(model_input.get("band_indexes", [])),
-                                   "expected_band_names": model_input.get("bands"),
-                                   "expected_value_range": model_input.get("value_range"),
-                                   "sensor": model_input.get("sensor")})
+                package = Path(source_path(inputs["model_package"], base))
+                native_manifest = package / "model" / "model.json"
+                if native_manifest.is_file():
+                    patch = classification.get("patch_classifier", {})
+                    image_spec.update({"minimum_band_count": max(patch.get("band_indexes", [1, 2, 3]))})
+                else:
+                    model = read_json(package / "model_config.json")
+                    model_input = model.get("input", {})
+                    image_spec.update({"expected_band_count": len(model_input.get("band_indexes", [])),
+                                       "expected_band_names": model_input.get("bands"),
+                                       "expected_value_range": model_input.get("value_range"),
+                                       "sensor": model_input.get("sensor")})
             except (OSError, ValueError, json.JSONDecodeError):
                 pass
         datasets.append(image_spec)
@@ -350,9 +356,20 @@ def compile_workflow(project_path: Path, output_job: Path | None = None) -> dict
                     low_confidence = (templated_output(classification.get("output_low_confidence"), "outputs/lulc_low_confidence.tif", year, workspace, multi)
                                       if classification.get("output_low_confidence") else None)
                     stage_id = f"classification_pytorch{suffix}"
-                    command = [sys.executable, str(ROOT / "scripts" / "pytorch_lulc.py"), "infer", "--model-package",
-                               source_path(inputs["model_package"], base), "--input-raster", image,
-                               "--class-output", lulc_output, "--confidence-output", confidence]
+                    package = Path(source_path(inputs["model_package"], base))
+                    if (package / "model" / "model.json").is_file():
+                        patch = classification["patch_classifier"]
+                        command = [sys.executable, str(ROOT / "scripts" / "pytorch_patch_lulc.py"), "infer", "--model-package",
+                                   str(package), "--input-raster", image, "--class-output", lulc_output,
+                                   "--confidence-output", confidence, "--patch-size", str(patch["patch_size"]),
+                                   "--stride", str(patch["stride"]), "--band-indexes", ",".join(str(item) for item in patch["band_indexes"]),
+                                   "--input-scale", str(patch["input_scale"])]
+                        if patch.get("batch_size") is not None:
+                            command += ["--batch-size", str(patch["batch_size"])]
+                    else:
+                        command = [sys.executable, str(ROOT / "scripts" / "pytorch_lulc.py"), "infer", "--model-package",
+                                   str(package), "--input-raster", image,
+                                   "--class-output", lulc_output, "--confidence-output", confidence]
                     if low_confidence:
                         command += ["--low-confidence-output", low_confidence]
                     if classification.get("low_confidence_threshold") is not None:

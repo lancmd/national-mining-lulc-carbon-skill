@@ -252,6 +252,9 @@ def build_local_project_from_inputs(output_project: str, project_id: str, worksp
                                     scheme: str = "high_water_coal_7class", w_dat_unit: str | None = None,
                                     w_dat_convention: str | None = None, workface_boundary: str | None = None,
                                     w_dat_max_distance_m: float = 300.0, subsidence_depth_raster: str | None = None,
+                                    patch_size: int | None = None, patch_stride: int | None = None,
+                                    patch_band_indexes: list[int] | None = None, patch_input_scale: float | None = None,
+                                    patch_batch_size: int | None = None, allow_patch_grid_as_lulc: bool = False,
                                     backend: str = "project") -> str:
     """Build a local multi-date project from supplied paths.
 
@@ -268,7 +271,10 @@ def build_local_project_from_inputs(output_project: str, project_id: str, worksp
         "w_dat": w_dat, "model_package": model_package, "training_roi": training_roi,
         "scheme": scheme, "w_dat_unit": w_dat_unit, "w_dat_convention": w_dat_convention,
         "workface_boundary": workface_boundary, "w_dat_max_distance_m": w_dat_max_distance_m,
-        "subsidence_depth_raster": subsidence_depth_raster,
+        "subsidence_depth_raster": subsidence_depth_raster, "patch_size": patch_size,
+        "patch_stride": patch_stride, "patch_band_indexes": patch_band_indexes,
+        "patch_input_scale": patch_input_scale, "patch_batch_size": patch_batch_size,
+        "allow_patch_grid_as_lulc": allow_patch_grid_as_lulc,
     }))
 
 
@@ -441,12 +447,17 @@ def validate_lulc_model(model_package: str, backend: str = "pytorch") -> str:
 @mcp.tool()
 def run_pytorch_lulc(model_package: str, input_raster: str, class_output: str,
                      confidence_output: str, device: str = "auto", low_confidence_output: str | None = None,
-                     low_confidence_threshold: float | None = None, backend: str = "pytorch") -> str:
-    """Run tiled PyTorch LULC inference and create classification and confidence GeoTIFF outputs."""
+                     low_confidence_threshold: float | None = None, patch_size: int | None = None,
+                     stride: int | None = None, band_indexes: list[int] | None = None,
+                     input_scale: float | None = None, batch_size: int | None = None,
+                     backend: str = "pytorch") -> str:
+    """Run PyTorch LULC inference; native ResNet-50 packages require an explicit patch-grid profile."""
     return json_result(registry.call(backend, "pytorch.run_lulc_inference", {
         "model_package": model_package, "input_raster": input_raster,
         "class_output": class_output, "confidence_output": confidence_output, "device": device,
         "low_confidence_output": low_confidence_output, "low_confidence_threshold": low_confidence_threshold,
+        "patch_size": patch_size, "stride": stride, "band_indexes": band_indexes,
+        "input_scale": input_scale, "batch_size": batch_size,
     }))
 
 

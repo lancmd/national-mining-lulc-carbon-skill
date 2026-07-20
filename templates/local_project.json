@@ -49,6 +49,15 @@
     "output_confidence": "outputs/lulc_confidence.tif",
     "output_low_confidence": null,
     "low_confidence_threshold": null,
+    "patch_classifier": {
+      "enabled": false,
+      "patch_size": null,
+      "stride": null,
+      "band_indexes": null,
+      "input_scale": null,
+      "batch_size": null,
+      "allow_as_lulc": false
+    },
     "envi_method": "maximum_likelihood",
     "accuracy": {
       "enabled": false,

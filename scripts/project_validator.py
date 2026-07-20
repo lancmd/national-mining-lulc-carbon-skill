@@ -28,6 +28,11 @@ VALID_SUBSIDENCE_WATER_MODES = {"classify_only", "estimate_volume", "composite_s
 VALID_INVEST_MODELS = {"carbon", "annual_water_yield", "habitat_quality", "sediment_delivery_ratio", "nutrient_delivery_ratio"}
 
 
+def native_patch_classifier(package: Path | None) -> bool:
+    """Recognise the checked-in ResNet-50 challenge package without editing it."""
+    return bool(package and package.is_dir() and (package / "model" / "model.json").is_file())
+
+
 def load_json(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8-sig") as stream:
         return json.load(stream)
@@ -218,8 +223,33 @@ def validate(project_path: Path) -> dict[str, Any]:
             required_path("training_roi", inputs.get("training_roi"), base, input_roots, errors)
         elif engine == "pytorch":
             package = required_path("model_package", inputs.get("model_package"), base, input_roots, errors)
-            if package and package.is_dir() and not (package / "model_config.json").exists():
-                errors.append("PyTorch model_package must contain model_config.json")
+            native_patch = native_patch_classifier(package)
+            if package and package.is_dir() and not (package / "model_config.json").exists() and not native_patch:
+                errors.append("PyTorch model_package must contain model_config.json or model/model.json")
+            if native_patch:
+                patch = classification.get("patch_classifier")
+                if not isinstance(patch, dict) or not patch.get("enabled"):
+                    errors.append("native ResNet-50 package requires classification.patch_classifier.enabled=true")
+                    patch = {}
+                if classification.get("scheme") != "standard_6class":
+                    errors.append("native ResNet-50 package can only aggregate to standard_6class; it cannot separate subsidence water")
+                for field in ("patch_size", "stride"):
+                    value = patch.get(field)
+                    if not isinstance(value, int) or value < 16:
+                        errors.append(f"classification.patch_classifier.{field} must be an integer >= 16")
+                patch_size, stride = patch.get("patch_size"), patch.get("stride")
+                if isinstance(patch_size, int) and isinstance(stride, int) and stride > patch_size:
+                    errors.append("classification.patch_classifier.stride must not exceed patch_size")
+                indexes = patch.get("band_indexes")
+                if not isinstance(indexes, list) or len(indexes) != 3 or any(not isinstance(item, int) or item < 1 for item in indexes) or len(set(indexes)) != 3:
+                    errors.append("classification.patch_classifier.band_indexes must contain three distinct positive RGB indexes")
+                scale = patch.get("input_scale")
+                if not isinstance(scale, (int, float)) or float(scale) <= 0:
+                    errors.append("classification.patch_classifier.input_scale must be a positive number")
+                if task_type == "full_chain" and not patch.get("allow_as_lulc", False):
+                    errors.append("native ResNet-50 patch-grid output is not pixel-wise LULC; set patch_classifier.allow_as_lulc=true only after independent validation")
+                if task_type == "full_chain" and patch.get("allow_as_lulc", False) and not classification.get("accuracy", {}).get("enabled"):
+                    errors.append("native ResNet-50 full-chain use requires classification.accuracy.enabled=true with independent validation samples")
         elif engine == "provided_lulc":
             required_path("lulc_baseline", inputs.get("lulc_baseline"), base, input_roots, errors)
         if classification.get("scheme") not in {"standard_6class", "high_water_coal_7class"}:

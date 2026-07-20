@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @pytest.mark.parametrize("script", [
     "project_conditional_inputs_smoke.py", "project_builder_smoke.py", "project_workflow_smoke.py", "plus_re_contract_smoke.py",
+    "native_resnet50_patch_smoke.py",
     "envi_backend_smoke.py",
     "maesa_copilot_smoke.py",
     "project_task_modes_smoke.py", "stage_output_mapping_smoke.py",

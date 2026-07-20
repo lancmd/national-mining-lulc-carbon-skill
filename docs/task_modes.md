@@ -4,7 +4,7 @@
 
 | task_type | 启用模块 | 最小核心输入 |
 |---|---|---|
-| `classification_only` | ENVI 或 PyTorch 分类 | 一期或多期影像，加 ROI 或模型包 |
+| `classification_only` | ENVI、PyTorch 语义分割或已登记 ResNet-50 图块分类 | 一期或多期影像，加 ROI 或模型包 |
 | `lulc_change_analysis` | 30 m 对齐、转移矩阵和 Sankey | 至少两期已有 LULC |
 | `plus_only` | PLUS ND/UD/EP/RE | 至少两期已有 LULC、驱动因子；RE 另需沉陷深度或 w.dat |
 | `invest_only` | InVEST Carbon 或已配置生态模型 | 已有 LULC、对应碳密度表或模型 datastack |

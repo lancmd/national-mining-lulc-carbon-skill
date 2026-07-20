@@ -32,7 +32,10 @@ def build(project_file: Path, project_id: str, workspace: str, imagery_periods: 
           model_package: str | None = None, training_roi: str | None = None, scheme: str = "high_water_coal_7class",
           w_dat_unit: str | None = None, w_dat_convention: str | None = None,
           workface_boundary: str | None = None, w_dat_max_distance_m: float = 300.0,
-          subsidence_depth_raster: str | None = None) -> dict[str, Any]:
+          subsidence_depth_raster: str | None = None, patch_size: int | None = None,
+          patch_stride: int | None = None, patch_band_indexes: list[int] | None = None,
+          patch_input_scale: float | None = None, patch_batch_size: int | None = None,
+          allow_patch_grid_as_lulc: bool = False) -> dict[str, Any]:
     if task_type not in TASK_TYPES:
         raise ValueError("task_type must be one of " + ", ".join(sorted(TASK_TYPES)))
     imagery_periods = imagery_periods or []
@@ -57,6 +60,10 @@ def build(project_file: Path, project_id: str, workspace: str, imagery_periods: 
         raise ValueError("classification requires exactly one of model_package (PyTorch) or training_roi (ENVI supervised classification)")
     if scheme not in {"standard_6class", "high_water_coal_7class"}:
         raise ValueError("scheme must be standard_6class or high_water_coal_7class")
+    native_patch_model = bool(model_package and (Path(model_package).expanduser() / "model" / "model.json").is_file())
+    if native_patch_model and scheme == "high_water_coal_7class":
+        # This model has one water class, so high-water seven-class output would be false precision.
+        scheme = "standard_6class"
     normalized_periods: list[dict[str, Any]] = []
     for item in imagery_periods:
         if not isinstance(item, dict) or not isinstance(item.get("year"), int) or not isinstance(item.get("path"), str):
@@ -98,7 +105,10 @@ def build(project_file: Path, project_id: str, workspace: str, imagery_periods: 
                    "driver_factors": {key: ({**value, "path": _local(value.get("path"))} if isinstance(value, dict) else _local(value)) for key, value in driver_factors.items()}},
         "classification": {"enabled": requires_classification, "engine": "pytorch" if model_package else ("envi" if training_roi else "provided_lulc"), "scheme": scheme,
                            "output_lulc": "outputs/lulc/LULC_{year}.tif", "output_confidence": "outputs/lulc/confidence_{year}.tif",
-                           "envi_method": "maximum_likelihood", "accuracy": {"enabled": False}},
+                           "envi_method": "maximum_likelihood", "accuracy": {"enabled": False},
+                           "patch_classifier": {"enabled": native_patch_model, "patch_size": patch_size, "stride": patch_stride,
+                                                "band_indexes": patch_band_indexes, "input_scale": patch_input_scale,
+                                                "batch_size": patch_batch_size, "allow_as_lulc": bool(allow_patch_grid_as_lulc)}},
         "plus": {"enabled": requires_plus,
                  "baseline_year": latest_year, "target_year": latest_year + 5,
                  "scenarios": ["ND", "UD", "EP", "RE"], "output_workspace": "outputs/plus",
@@ -122,8 +132,13 @@ def build(project_file: Path, project_id: str, workspace: str, imagery_periods: 
     project_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return {"status": "completed", "project_file": str(project_file), "project_id": project_id,
             "task_type": task_type, "classification_engine": payload["classification"]["engine"],
+            "model_mode": "registered_resnet50_patch_classifier" if native_patch_model else "segmentation_or_envi",
             "imagery_years": [item["year"] for item in normalized_periods],
             "pending_inputs": (["choose_one_subsidence_input"] if w_dat and subsidence_depth_raster else []) +
                               (["w_dat_unit_and_convention"] if w_dat and (not w_dat_unit or not w_dat_convention) else []) +
                               (["w_dat_max_distance_m"] if w_dat and (not isinstance(w_dat_max_distance_m, (int, float)) or w_dat_max_distance_m <= 0) else []) +
+                              (["resnet50_patch_size_stride_rgb_scale"] if native_patch_model and
+                               (not isinstance(patch_size, int) or not isinstance(patch_stride, int) or
+                                not isinstance(patch_band_indexes, list) or not isinstance(patch_input_scale, (int, float))) else []) +
+                              (["resnet50_patch_grid_full_chain_confirmation_and_accuracy"] if native_patch_model and task_type == "full_chain" else []) +
                               (["annual_water_yield_and_habitat_parameter_datastacks"] if task_type == "full_chain" else [])}

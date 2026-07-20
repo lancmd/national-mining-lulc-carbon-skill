@@ -40,7 +40,11 @@ def main() -> int:
                                w_dat_unit=params.get("w_dat_unit"), w_dat_convention=params.get("w_dat_convention"),
                                workface_boundary=params.get("workface_boundary"),
                                w_dat_max_distance_m=params.get("w_dat_max_distance_m", 300.0),
-                               subsidence_depth_raster=params.get("subsidence_depth_raster"))
+                               subsidence_depth_raster=params.get("subsidence_depth_raster"),
+                               patch_size=params.get("patch_size"), patch_stride=params.get("patch_stride"),
+                               patch_band_indexes=params.get("patch_band_indexes"), patch_input_scale=params.get("patch_input_scale"),
+                               patch_batch_size=params.get("patch_batch_size"),
+                               allow_patch_grid_as_lulc=bool(params.get("allow_patch_grid_as_lulc", False)))
         result = {"status": "pending_validation" if report["pending_inputs"] else "completed", "result": report,
                   "outputs": [report["project_file"]]}
     elif envelope.get("operation") == "project.validate":

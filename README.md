@@ -33,6 +33,7 @@ It is built for multi-period LULC, Sankey transitions, PLUS ND/UD/EP/RE scenario
 | Capability | Local implementation | Result state |
 |---|---|---|
 | Project builder, input validation, spatial preflight, manifests and resume | Python | Automatic |
+| PyTorch semantic segmentation and registered ResNet-50 patch classification | Local PyTorch adapter | Patch-grid result stays `pending_validation` until independently assessed |
 | ENVI supervised classification | Local IDL command bridge | Requires a licensed ENVI/IDL installation |
 | LULC transitions, Sankey and standalone SVG maps | Python | Automatic |
 | PLUS ND / UD / EP / RE | HPSCIL snapshot GUI bridge | pywinauto first; image-template fallback; first-use UI calibration required |
@@ -58,7 +59,7 @@ If Node.js is unavailable, install a supported Node.js runtime first, or use Cod
 
 ```powershell
 cd MAESA-Agent
-.\scripts\setup_agent.ps1 -WithPlusGui
+.\scripts\setup_agent.ps1 -WithPyTorch -WithPlusGui
 .\scripts\start_agent_mcp.ps1
 ```
 
@@ -93,7 +94,7 @@ Read [LLM Copilot](docs/llm_copilot.md) before enabling a cloud endpoint or down
 
 Enable only the modules you need. The usual full chain needs:
 
-- dated local imagery plus either ENVI ROI samples or a model package;
+- dated local imagery plus either ENVI ROI samples, a segmentation model package, or a registered ResNet-50 patch-classifier package;
 - mine boundary, two or more LULC periods, and typed PLUS driver factors;
 - carbon-density CSV;
 - a positive-down subsidence-depth GeoTIFF **or** `w.dat` with its unit, convention, scope and maximum interpolation distance;
@@ -102,6 +103,8 @@ Enable only the modules you need. The usual full chain needs:
 - optional ArcGIS Pro `.aprx`, layout and `.lyrx` files for publication maps.
 
 The project fixes a 30 m projected analysis grid. Ten metre categorical LULC is aggregated by majority; continuous drivers use bilinear resampling; aspect uses nearest-neighbour treatment.
+
+The registered ResNet-50 package is an RGB **image/patch classifier**, not a pixel-wise segmentation network. Its output is an explicit coarse patch grid that aggregates to the ordinary six-class scheme and remains `pending_validation`. See [the PyTorch model guide](deep_learning/pytorch_workflow.md) before using it in a project.
 
 ## Local software
 
