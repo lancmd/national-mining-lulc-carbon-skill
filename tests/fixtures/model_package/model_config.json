@@ -4,13 +4,14 @@
   "format": "exported_program",
   "weights": "model.pt2",
   "sha256": "7493b9b1bbd658935e59315eb6ce55132bc249f2566c8c8e16f92ab0c40353c8",
-  "sensor": "Sentinel-2_L2A",
-  "spatial_resolution_m": 10,
   "classes": [
     {"id": 1, "name": "water"},
     {"id": 2, "name": "built_up"}
   ],
   "input": {
+    "sensor": "Sentinel-2_L2A",
+    "resolution_m": 10,
+    "value_range": [0, 10000],
     "bands": ["red", "nir"],
     "band_indexes": [1, 2],
     "mean": [0.1, 0.2],

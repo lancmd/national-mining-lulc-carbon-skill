@@ -23,6 +23,34 @@ def _local(path: str | None) -> str | None:
     return str(Path(path).expanduser().resolve()) if path else None
 
 
+def _invest_model_config(models: dict[str, Any] | None, enabled: bool) -> dict[str, Any]:
+    """Normalise agent-supplied InVEST model settings without inventing a model.
+
+    Carbon remains the useful default for a full-chain project.  Supplying an
+    explicit ``invest_models`` object, however, is an instruction to use that
+    selection verbatim.  This lets an ``invest_only`` project run Annual Water
+    Yield and Habitat Quality without also asking for a carbon-density table.
+    """
+    if not enabled:
+        return {}
+    if models is None:
+        return {"carbon": {"enabled": True, "service_unit": "Mg C"}}
+    if not isinstance(models, dict) or not models:
+        raise ValueError("invest_models must be a non-empty object when InVEST is enabled")
+    result: dict[str, Any] = {}
+    for name, value in models.items():
+        if not isinstance(name, str) or not name or not isinstance(value, dict):
+            raise ValueError("each invest_models entry requires a model name and an object")
+        item = dict(value)
+        for key in ("datastack_template", "provided_datastack"):
+            if item.get(key):
+                item[key] = _local(str(item[key]))
+        result[name] = item
+    if not any(item.get("enabled") for item in result.values()):
+        raise ValueError("invest_models must enable at least one model")
+    return result
+
+
 def build(project_file: Path, project_id: str, workspace: str, imagery_periods: list[dict[str, Any]] | None = None,
           driver_factors: dict[str, Any] | None = None, mine_boundary: str | None = None,
           carbon_density: str | None = None, *, task_type: str = "full_chain",
@@ -35,7 +63,7 @@ def build(project_file: Path, project_id: str, workspace: str, imagery_periods: 
           subsidence_depth_raster: str | None = None, patch_size: int | None = None,
           patch_stride: int | None = None, patch_band_indexes: list[int] | None = None,
           patch_input_scale: float | None = None, patch_batch_size: int | None = None,
-          allow_patch_grid_as_lulc: bool = False) -> dict[str, Any]:
+          allow_patch_grid_as_lulc: bool = False, invest_models: dict[str, Any] | None = None) -> dict[str, Any]:
     if task_type not in TASK_TYPES:
         raise ValueError("task_type must be one of " + ", ".join(sorted(TASK_TYPES)))
     imagery_periods = imagery_periods or []
@@ -76,11 +104,15 @@ def build(project_file: Path, project_id: str, workspace: str, imagery_periods: 
             raise ValueError("each historical LULC period requires integer year and local path")
         normalized_lulc.append({"year": item["year"], "path": _local(item["path"])})
     normalized_lulc.sort(key=lambda item: item["year"])
+    invest_enabled = task_type in {"invest_only", "full_chain"}
+    normalized_invest_models = _invest_model_config(invest_models, invest_enabled)
     factor_paths = [value.get("path") if isinstance(value, dict) else value for value in driver_factors.values()]
+    invest_datastacks = [item.get(key) for item in normalized_invest_models.values() if isinstance(item, dict)
+                         for key in ("datastack_template", "provided_datastack") if item.get(key)]
     roots = sorted({str(Path(value).expanduser().resolve().parent) for value in [
         *[item["path"] for item in normalized_periods], *[item["path"] for item in normalized_lulc], *factor_paths,
         mine_boundary, carbon_density, ecosystem_criteria, ecosystem_config, w_dat, subsidence_depth_raster,
-        model_package, training_roi, workface_boundary] if value})
+        model_package, training_roi, workface_boundary, *invest_datastacks] if value})
     if isinstance(gis_outputs, dict):
         for key in ("aprx",):
             if gis_outputs.get(key):
@@ -119,7 +151,7 @@ def build(project_file: Path, project_id: str, workspace: str, imagery_periods: 
                          "output_depth_unit": "m", "output_depth_convention": "positive_down",
                          "interpolation": "nearest_within_scope", "scope_vector": _local(workface_boundary) or _local(mine_boundary),
                          "max_interpolation_distance_m": w_dat_max_distance_m}}},
-        "invest": {"enabled": task_type in {"invest_only", "full_chain"}, "output_workspace": "outputs/invest", "models": {"carbon": {"enabled": True, "service_unit": "Mg C"}}},
+        "invest": {"enabled": invest_enabled, "output_workspace": "outputs/invest", "models": normalized_invest_models},
         "subsidence_water": {"enabled": False, "mode": "classify_only"},
         "ecosystem_service": {"enabled": task_type == "ecosystem_service_only", "method": "minmax",
                               "criteria_table": _local(ecosystem_criteria), "config": _local(ecosystem_config)},
@@ -141,4 +173,6 @@ def build(project_file: Path, project_id: str, workspace: str, imagery_periods: 
                                (not isinstance(patch_size, int) or not isinstance(patch_stride, int) or
                                 not isinstance(patch_band_indexes, list) or not isinstance(patch_input_scale, (int, float))) else []) +
                               (["resnet50_patch_grid_full_chain_confirmation_and_accuracy"] if native_patch_model and task_type == "full_chain" else []) +
-                              (["annual_water_yield_and_habitat_parameter_datastacks"] if task_type == "full_chain" else [])}
+                              (["invest_model_datastack"] if any(item.get("enabled") and name != "carbon" and
+                                                                   not (item.get("datastack_template") or item.get("provided_datastack"))
+                                                                   for name, item in normalized_invest_models.items()) else [])}

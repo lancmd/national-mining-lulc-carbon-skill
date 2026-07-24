@@ -5,6 +5,7 @@
   "native_package_layout": {
     "manifest": "model/model.json",
     "weights": "model/best_resnet50.pth",
+    "manifest_name": "lulc-resnet50",
     "architecture": "resnet50",
     "format": "pytorch_state_dict",
     "weights_sha256": "954abb05b1dab6a62fb80f06e73c2201b1e30382b76c19c57951e64a73112065"

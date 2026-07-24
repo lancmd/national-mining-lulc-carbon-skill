@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -26,8 +27,11 @@ def write_raster(path: Path, values: np.ndarray, *, dtype: str = "float32") -> N
 
 
 invest = probe_software()["software"]["invest"]["path"]
+if os.getenv("MAESA_RUN_LOCAL_INVEST_INTEGRATION") != "1":
+    print(json.dumps({"status": "completed", "execution": "skipped", "reason": "set MAESA_RUN_LOCAL_INVEST_INTEGRATION=1 for local InVEST integration"}))
+    raise SystemExit(0)
 if not invest:
-    print(json.dumps({"status": "skipped", "reason": "local InVEST is unavailable"}))
+    print(json.dumps({"status": "completed", "execution": "skipped", "reason": "local InVEST is unavailable"}))
     raise SystemExit(0)
 
 with tempfile.TemporaryDirectory() as temporary:

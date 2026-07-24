@@ -121,11 +121,39 @@ def workspace_for(project_file: Path, project: dict[str, Any]) -> Path:
     return value.resolve() if value.is_absolute() else (project_file.parent / value).resolve()
 
 
-def planned_inputs(project: dict[str, Any]) -> list[str]:
-    values: list[str] = []
-    for value in project.get("inputs", {}).values() if isinstance(project.get("inputs"), dict) else []:
-        if isinstance(value, str) and value:
-            values.append(value)
+PATH_LEAF_KEYS = {
+    "path", "imagery", "lulc_baseline", "historical_lulc", "mine_boundary", "carbon_density", "model_package",
+    "training_roi", "subsidence_w_dat", "subsidence_depth_raster", "dem", "workface_boundary",
+    "aquatic_vegetation_boundary", "subsidence_water_boundary", "datastack_template", "provided_datastack",
+}
+
+
+def looks_like_local_path(value: str) -> bool:
+    suffixes = {".tif", ".tiff", ".img", ".gpkg", ".shp", ".geojson", ".csv", ".json", ".dat", ".txt", ".aprx", ".lyrx"}
+    candidate = Path(value)
+    return candidate.is_absolute() or "/" in value or "\\" in value or candidate.suffix.lower() in suffixes
+
+
+def nested_input_paths(value: Any, key: str = "") -> list[str]:
+    """Collect paths from dated imagery and nested driver/model definitions."""
+    if isinstance(value, dict):
+        return [item for child_key, child in value.items() for item in nested_input_paths(child, str(child_key))]
+    if isinstance(value, list):
+        return [item for child in value for item in nested_input_paths(child, key)]
+    if isinstance(value, str) and value and (key in PATH_LEAF_KEYS or looks_like_local_path(value)):
+        return [value]
+    return []
+
+
+def project_relative_path(project_file: Path, value: str) -> Path:
+    candidate = Path(value).expanduser()
+    return candidate.resolve() if candidate.is_absolute() else (project_file.parent / candidate).resolve()
+
+
+def planned_inputs(project: dict[str, Any], project_file: Path | None = None) -> list[str]:
+    values = nested_input_paths(project.get("inputs", {})) if isinstance(project.get("inputs"), dict) else []
+    if project_file:
+        return sorted({str(project_relative_path(project_file, value)) for value in values})
     return sorted(set(values))
 
 
@@ -144,12 +172,16 @@ def controlled_plan(project_file: Path, purpose: str) -> dict[str, Any]:
     ]
     validation = project.get("validation", {})
     if isinstance(validation, dict) and validation.get("enabled"):
+        evidence_value = validation.get("evidence_file")
+        evidence = (project_relative_path(project_file, str(evidence_value)) if evidence_value
+                    else workspace / "validation" / "analysis_evidence.json")
+        report_value = str(validation.get("output_report", "validation/analysis_validation_report.json"))
+        report = project_relative_path(workspace / "project.json", report_value)
         steps.append({"id": "validate_results", "tool": "validate_analysis_results", "arguments": {
-            "validation_file": str(workspace / "validation" / "analysis_evidence.json"),
-            "output_report": str(workspace / "validation" / "analysis_validation_report.json")}})
+            "validation_file": str(evidence), "output_report": str(report)}})
     return {"schema_version": PLAN_SCHEMA_VERSION, "kind": "maesa_controlled_execution_plan",
             "project_file": str(project_file), "purpose": purpose, "task_type": project.get("task_type", "custom"),
-            "expected_inputs": planned_inputs(project),
+            "expected_inputs": planned_inputs(project, project_file),
             "expected_outputs": [str(workspace / name) for name in ("outputs_manifest.json", "provenance.json", "validation_summary.json")],
             "steps": steps, "confirmation_required": True}
 

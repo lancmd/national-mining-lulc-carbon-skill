@@ -38,6 +38,14 @@ with tempfile.TemporaryDirectory() as temporary:
     audit = validate_native_package(package)
     assert audit["status"] == "valid", audit
     assert audit["class_map"] == {0: 6, 1: 3, 2: 4, 3: 5, 4: 2, 5: 2, 6: 2, 7: 1}
+    # The generic package fixture is allowed for adapter tests.  A package
+    # claiming to be the registered local ResNet-50 is pinned to the reviewed
+    # fingerprint and cannot replace its manifest hash silently.
+    registered_claim = dict(manifest); registered_claim["name"] = "lulc-resnet50"
+    (weights.parent / "model.json").write_text(json.dumps(registered_claim, ensure_ascii=False), encoding="utf-8")
+    pinned = validate_native_package(package)
+    assert pinned["status"] == "invalid" and any("pinned registry fingerprint" in item for item in pinned["errors"]), pinned
+    (weights.parent / "model.json").write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
     envelope = {"protocol_version": "1.0", "request_id": "native-package-smoke", "operation": "pytorch.validate_model",
                 "parameters": {"model_package": str(package)}}
     backend = subprocess.run([sys.executable, str(ROOT / "scripts" / "pytorch_backend.py")], input=json.dumps(envelope),

@@ -255,6 +255,7 @@ def build_local_project_from_inputs(output_project: str, project_id: str, worksp
                                     patch_size: int | None = None, patch_stride: int | None = None,
                                     patch_band_indexes: list[int] | None = None, patch_input_scale: float | None = None,
                                     patch_batch_size: int | None = None, allow_patch_grid_as_lulc: bool = False,
+                                    invest_models: dict[str, Any] | None = None,
                                     backend: str = "project") -> str:
     """Build a local multi-date project from supplied paths.
 
@@ -274,7 +275,7 @@ def build_local_project_from_inputs(output_project: str, project_id: str, worksp
         "subsidence_depth_raster": subsidence_depth_raster, "patch_size": patch_size,
         "patch_stride": patch_stride, "patch_band_indexes": patch_band_indexes,
         "patch_input_scale": patch_input_scale, "patch_batch_size": patch_batch_size,
-        "allow_patch_grid_as_lulc": allow_patch_grid_as_lulc,
+        "allow_patch_grid_as_lulc": allow_patch_grid_as_lulc, "invest_models": invest_models,
     }))
 
 

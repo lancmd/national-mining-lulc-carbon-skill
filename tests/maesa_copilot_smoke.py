@@ -27,4 +27,22 @@ plan = controlled_plan(project, "validate local workflow")
 assert validate_execution_plan(plan, project)["status"] == "valid"
 plan["steps"][0]["tool"] = "run_shell_command"
 assert validate_execution_plan(plan, project)["status"] == "invalid"
+
+with tempfile.TemporaryDirectory() as temporary:
+    root = Path(temporary)
+    nested = {
+        "schema_version": 2, "project_id": "nested-inputs", "task_type": "invest_only", "workspace": "runtime",
+        "inputs": {"imagery_periods": [{"year": 2020, "path": "inputs/image_2020.tif"}],
+                   "driver_factors": {"dem": {"path": "inputs/dem.tif", "data_type": "continuous"}},
+                   "historical_lulc": ["inputs/lulc_2020.tif"], "carbon_density": "inputs/carbon.csv"},
+        "validation": {"enabled": True, "evidence_file": "evidence/custom_evidence.json",
+                       "output_report": "reports/custom_validation.json"},
+    }
+    nested_project = root / "project.json"; nested_project.write_text(json.dumps(nested), encoding="utf-8")
+    nested_plan = controlled_plan(nested_project, "nested paths")
+    assert str(root / "inputs" / "image_2020.tif") in nested_plan["expected_inputs"], nested_plan
+    assert str(root / "inputs" / "dem.tif") in nested_plan["expected_inputs"], nested_plan
+    validation_step = nested_plan["steps"][-1]["arguments"]
+    assert validation_step["validation_file"] == str(root / "evidence" / "custom_evidence.json"), validation_step
+    assert validation_step["output_report"] == str(root / "runtime" / "reports" / "custom_validation.json"), validation_step
 print(json.dumps({"status": "completed", "checks": ["LLM provider config", "local-first endpoint guard", "confirmation-gated plan"]}))

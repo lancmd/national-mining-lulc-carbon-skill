@@ -17,7 +17,9 @@ from pathlib import Path
 from typing import Any
 
 
+ROOT = Path(__file__).resolve().parents[1]
 NATIVE_MANIFEST = Path("model") / "model.json"
+REGISTERED_RESNET50 = ROOT / "deep_learning" / "registered_models" / "lulc_resnet50_8class.json"
 EXPECTED_CLASS_NAMES = [
     "其他用地", "耕地", "林地", "草地与其他绿地", "城乡住宅与商业用地",
     "工业用地", "交通运输用地", "水域与水利设施用地",
@@ -54,6 +56,28 @@ def load_native_manifest(package: Path) -> tuple[dict[str, Any], Path]:
     if relative.is_absolute() or ".." in relative.parts:
         raise ValueError("weights_file must be a package-relative path")
     return manifest, package / "model" / relative
+
+
+def registered_resnet50_profile() -> dict[str, Any]:
+    """Load the reviewed local model fingerprint shipped with this adapter."""
+    with REGISTERED_RESNET50.open("r", encoding="utf-8") as stream:
+        profile = json.load(stream)
+    if not isinstance(profile, dict):
+        raise ValueError("registered ResNet-50 profile is invalid")
+    layout = profile.get("native_package_layout")
+    if not isinstance(layout, dict):
+        raise ValueError("registered ResNet-50 profile is invalid")
+    digest = layout.get("weights_sha256")
+    if not isinstance(digest, str) or len(digest) != 64:
+        raise ValueError("registered ResNet-50 profile has no SHA-256 fingerprint")
+    return profile
+
+
+def uses_registered_resnet50_profile(manifest: dict[str, Any], profile: dict[str, Any]) -> bool:
+    layout = profile["native_package_layout"]
+    return (manifest.get("name") == layout.get("manifest_name") and
+            manifest.get("architecture") == layout.get("architecture") and
+            manifest.get("format") == layout.get("format"))
 
 
 def native_class_map(manifest: dict[str, Any]) -> dict[int, int] | None:
@@ -102,15 +126,25 @@ def validate_native_package(package: Path, verify_weights: bool = True) -> dict[
         if isinstance(preprocessing.get("std"), list) and any(float(value) <= 0 for value in preprocessing["std"]):
             errors.append("preprocessing.std values must be positive")
     actual_hash = None
+    profile = registered_resnet50_profile()
+    profile_layout = profile["native_package_layout"]
+    registered_profile = uses_registered_resnet50_profile(manifest, profile)
+    registered_hash = str(profile_layout["weights_sha256"]).lower()
+    manifest_hash = str(manifest.get("weights_sha256", "")).lower()
     if not weights.is_file():
         errors.append(f"weights file does not exist: {weights}")
     elif verify_weights:
         actual_hash = file_sha256(weights)
-        expected_hash = str(manifest.get("weights_sha256", "")).lower()
-        if not expected_hash:
+        if not manifest_hash:
             errors.append("weights_sha256 is required")
-        elif actual_hash != expected_hash:
+        elif actual_hash != manifest_hash:
             errors.append("weights_sha256 does not match the native model manifest")
+        if registered_profile and manifest_hash != registered_hash:
+            errors.append("registered ResNet-50 manifest SHA-256 differs from the pinned registry fingerprint")
+        if registered_profile and actual_hash != registered_hash:
+            errors.append("registered ResNet-50 weights differ from the pinned registry fingerprint")
+    elif registered_profile and manifest_hash != registered_hash:
+        errors.append("registered ResNet-50 manifest SHA-256 differs from the pinned registry fingerprint")
     mapping = native_class_map(manifest)
     if mapping is None:
         errors.append("the native classes have no reviewed mapping to the standard_6class scheme")
@@ -121,6 +155,9 @@ def validate_native_package(package: Path, verify_weights: bool = True) -> dict[
         "architecture": manifest.get("architecture"),
         "weights": str(weights),
         "actual_sha256": actual_hash,
+        "registered_model_id": profile.get("model_id") if registered_profile else None,
+        "registered_sha256": registered_hash if registered_profile else None,
+        "registry_hash_pinned": registered_profile,
         "class_count": class_count,
         "class_names": names,
         "output_scheme": "standard_6class" if mapping else None,
@@ -235,7 +272,7 @@ def infer_patch_grid(package: Path, input_raster: Path, class_output: Path, conf
                     labels = np.zeros(len(cols), dtype="uint8")
                     confidence = np.full(len(cols), -9999.0, dtype="float32")
                     low = np.full(len(cols), 255, dtype="uint8")
-                    pending: list[tuple[int, Any]] = []
+                    batch_patches: list[tuple[int, Any]] = []
                     for output_col, col in enumerate(cols):
                         offset = (patch_size - stride) / 2
                         window = Window(col - offset, row - offset, patch_size, patch_size)
@@ -244,12 +281,12 @@ def infer_patch_grid(package: Path, input_raster: Path, class_output: Path, conf
                         if float(valid.mean()) < 0.5:
                             continue
                         data = image.filled(0.0)
-                        pending.append((output_col, ((data * float(input_scale)) - mean) / std))
-                        if len(pending) == batch_size:
-                            _predict_batch(model, pending, labels, confidence, low, mapping, device, native_count, low_confidence_threshold, torch, np)
-                            pending = []
-                    if pending:
-                        _predict_batch(model, pending, labels, confidence, low, mapping, device, native_count, low_confidence_threshold, torch, np)
+                        batch_patches.append((output_col, ((data * float(input_scale)) - mean) / std))
+                        if len(batch_patches) == batch_size:
+                            _predict_batch(model, batch_patches, labels, confidence, low, mapping, device, native_count, low_confidence_threshold, torch, np)
+                            batch_patches = []
+                    if batch_patches:
+                        _predict_batch(model, batch_patches, labels, confidence, low, mapping, device, native_count, low_confidence_threshold, torch, np)
                     class_sink.write(labels[None, None, :], window=Window(0, output_row, len(cols), 1))
                     confidence_sink.write(confidence[None, None, :], window=Window(0, output_row, len(cols), 1))
                     if low_sink:
@@ -276,17 +313,17 @@ def infer_patch_grid(package: Path, input_raster: Path, class_output: Path, conf
     return report
 
 
-def _predict_batch(model: Any, pending: list[tuple[int, Any]], labels: Any, confidence: Any, low: Any,
+def _predict_batch(model: Any, batch_patches: list[tuple[int, Any]], labels: Any, confidence: Any, low: Any,
                    mapping: dict[int, int], device: str, native_count: int, threshold: float | None,
                    torch: Any, np: Any) -> None:
-    tensor = torch.from_numpy(np.stack([item[1] for item in pending])).to(device)
+    tensor = torch.from_numpy(np.stack([item[1] for item in batch_patches])).to(device)
     with torch.inference_mode():
         logits = model(tensor)
-        if logits.ndim != 2 or logits.shape != (len(pending), native_count):
+        if logits.ndim != 2 or logits.shape != (len(batch_patches), native_count):
             raise ValueError(f"ResNet-50 output must be [batch,{native_count}], got {tuple(logits.shape)}")
         probabilities = torch.softmax(logits, dim=1)
         scores, indexes = probabilities.max(dim=1)
-    for (output_col, _), score, index in zip(pending, scores.detach().cpu().tolist(), indexes.detach().cpu().tolist()):
+    for (output_col, _), score, index in zip(batch_patches, scores.detach().cpu().tolist(), indexes.detach().cpu().tolist()):
         labels[output_col] = int(mapping[int(index)])
         confidence[output_col] = float(score)
         low[output_col] = int(float(score) < float(threshold)) if threshold is not None else 0

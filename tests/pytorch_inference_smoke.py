@@ -47,10 +47,9 @@ config = {
     "format": "exported_program",
     "weights": "model.pt2",
     "sha256": digest,
-    "sensor": "synthetic",
-    "spatial_resolution_m": 10,
     "classes": [{"id": 1, "name": "positive"}, {"id": 2, "name": "negative"}],
     "input": {
+        "sensor": "synthetic", "resolution_m": 10, "value_range": [-3.0, 3.0],
         "bands": ["signal", "unused"], "band_indexes": [1, 2],
         "mean": [0.0, 0.0], "std": [1.0, 1.0], "scale": 1.0, "offset": 0.0,
         "patch_size": 32, "stride": 24,

@@ -19,6 +19,33 @@ from path_safety import PathSafetyError, is_unc, require_within, resolved
 
 
 ROOT = Path(__file__).resolve().parents[1]
+PAUSE_STATUSES = {"prepared", "waiting_interactive", "pending_validation"}
+
+
+def reported_status(stdout: str) -> str | None:
+    """Read the final structured status printed by a local command.
+
+    Several MAESA validators deliberately return exit code zero for
+    ``pending_validation``.  A subprocess success therefore cannot by itself
+    mean that scientific validation is complete.  Scan JSON objects so both
+    one-line MCP envelopes and pretty-printed command reports are accepted.
+    """
+    decoder = json.JSONDecoder()
+    candidates: list[tuple[int, int, str]] = []
+    for match in re.finditer(r"\{", stdout or ""):
+        try:
+            payload, end = decoder.raw_decode((stdout or "")[match.start():])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict) and isinstance(payload.get("status"), str):
+            candidates.append((match.start(), match.start() + end, payload["status"]))
+    # A pretty report may contain nested per-section statuses.  Ignore objects
+    # embedded in another decoded JSON object so a completed LULC subsection
+    # cannot overwrite the enclosing pending_validation result.
+    outer = [item for item in candidates if not any(
+        other[0] <= item[0] and item[1] <= other[1] and other[:2] != item[:2]
+        for other in candidates)]
+    return outer[-1][2] if outer else None
 
 
 def now() -> str:
@@ -279,7 +306,12 @@ class JobRunner:
                 attempts.append(f"attempt {attempt + 1}: returncode={process.returncode}\n{process.stdout or ''}")
                 if process.returncode == 0:
                     log_path.write_text("\n\n".join(attempts), encoding="utf-8")
-                    return {"status": "completed", "command": args, "returncode": process.returncode,
+                    status = reported_status(process.stdout or "") or "completed"
+                    if status == "failed":
+                        raise RuntimeError(f"command reported failed status; see {log_path}")
+                    if status not in {"completed", *PAUSE_STATUSES}:
+                        status = "completed"
+                    return {"status": status, "command": args, "returncode": process.returncode,
                             "attempts": attempt + 1, "timeout_seconds": timeout, "log": f"logs/{stage_id}.log"}
             except subprocess.TimeoutExpired as error:
                 attempts.append(f"attempt {attempt + 1}: timeout after {timeout:g} seconds\n{error.stdout or ''}")

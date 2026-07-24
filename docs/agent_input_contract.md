@@ -2,6 +2,8 @@
 
 智能体可以调用 `build_local_project_from_inputs`，直接用本地路径创建项目，再调用 `run_local_project`。不需要手写 `workflow_job.json`。
 
+`task_type: "invest_only"` 可选传入 `invest_models`。例如同时运行水源供给和生境质量时，分别提供两个经本地 InVEST 验证的 datastack 模板及 `expected_outputs`；未传入该对象时才使用 Carbon 的默认配置。
+
 最小数据组合如下：
 
 - 至少两期带年份的多波段遥感影像；

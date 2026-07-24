@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import re
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -129,9 +130,59 @@ def ensure_parent(value: str) -> None:
     Path(value).parent.mkdir(parents=True, exist_ok=True)
 
 
+LAYOUT_ELEMENT_ALIASES = {
+    "TEXT_ELEMENT": (("title", "标题", "图名", "地图标题"),),
+    "LEGEND_ELEMENT": (("legend", "图例"),),
+    "MAPFRAME_ELEMENT": (("mapframe", "map frame", "地图框", "地图框架", "主地图"),),
+}
+
+
+def normalized_element_name(value: Any) -> str:
+    return re.sub(r"[\s_\-]+", "", str(value or "").casefold())
+
+
+def element_name_candidates(element_type: str, name: str | None) -> set[str]:
+    """Return exact and Chinese/English semantic layout-name candidates."""
+    requested = normalized_element_name(name)
+    candidates = {requested} if requested else set()
+    for group in LAYOUT_ELEMENT_ALIASES.get(element_type, ()):
+        aliases = {normalized_element_name(item) for item in group}
+        if not requested or requested in aliases:
+            candidates.update(aliases)
+    return candidates
+
+
 def layout_element(layout: Any, element_type: str, name: str | None) -> Any | None:
-    elements = layout.listElements(element_type, name) if name else layout.listElements(element_type)
+    # ``listElements`` supports a wildcard rather than a locale-aware semantic
+    # lookup.  Enumerate the element type first so templates named “标题”,
+    # “图例” and “地图框” work alongside English templates.
+    elements = list(layout.listElements(element_type))
+    candidates = element_name_candidates(element_type, name)
+    if candidates:
+        for element in elements:
+            if normalized_element_name(getattr(element, "name", "")) in candidates:
+                return element
+    if name:
+        exact = list(layout.listElements(element_type, name))
+        if exact:
+            return exact[0]
+        return None
     return elements[0] if elements else None
+
+
+def renderer_value_codes(values: Any) -> set[str]:
+    """Flatten ArcPy unique-value payloads without splitting string class IDs.
+
+    ArcGIS commonly exposes a code as ``[[10]]`` but custom renderers and test
+    layers may expose ``"10"`` or ``["10"]``.  Treat every scalar as one
+    category: indexing a string would turn class ``"10"`` into ``"1"``.
+    """
+    if isinstance(values, (list, tuple)):
+        result: set[str] = set()
+        for value in values:
+            result.update(renderer_value_codes(value))
+        return result
+    return {str(values).strip()} if values is not None else set()
 
 
 def renderer_report(layer: Any, definition: dict[str, Any]) -> dict[str, Any]:
@@ -142,16 +193,18 @@ def renderer_report(layer: Any, definition: dict[str, Any]) -> dict[str, Any]:
     can be audited even where no discrete legend is expected.
     """
     report: dict[str, Any] = {"layer": layer.name, "kind": definition.get("kind", "unknown"), "renderer": None,
-                              "categories": [], "expected_codes": definition.get("expected_codes")}
+                              "categories": [], "category_codes": [], "expected_codes": definition.get("expected_codes")}
     try:
         renderer = layer.symbology.renderer
         report["renderer"] = getattr(renderer, "type", type(renderer).__name__)
         for group in getattr(renderer, "groups", []) or []:
             for item in getattr(group, "items", []) or []:
                 values = getattr(item, "values", [])
+                codes = sorted(renderer_value_codes(values))
+                rows = values if isinstance(values, (list, tuple)) else [values]
                 report["categories"].append({"label": str(getattr(item, "label", "")),
                                              "values": [[str(value) for value in row] if isinstance(row, (list, tuple)) else str(row)
-                                                        for row in values]})
+                                                        for row in rows], "codes": codes})
         for item in getattr(renderer, "classBreaks", []) or []:
             report["categories"].append({"label": str(getattr(item, "label", "")),
                                          "upper_bound": getattr(item, "upperBound", None)})
@@ -162,8 +215,12 @@ def renderer_report(layer: Any, definition: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(expected, list) or not expected:
         report["symbol_status"] = "not_applicable" if definition.get("kind") == "continuous" else "pending_validation"
         return report
-    serialized = json.dumps(report["categories"], ensure_ascii=False)
-    missing = [int(code) for code in expected if str(code) not in serialized]
+    actual_codes = {code for category in report["categories"] for code in category.get("codes", [])}
+    report["category_codes"] = sorted(actual_codes)
+    # Compare whole class codes, not substrings.  The old JSON-string check
+    # falsely considered expected code 1 present when the renderer only had
+    # code 10, and did the reverse for string-valued categories.
+    missing = [code for code in expected if str(code).strip() not in actual_codes]
     report["missing_codes"] = missing
     report["symbol_status"] = "completed" if not missing else "failed"
     return report

@@ -44,9 +44,21 @@ def main() -> int:
                                patch_size=params.get("patch_size"), patch_stride=params.get("patch_stride"),
                                patch_band_indexes=params.get("patch_band_indexes"), patch_input_scale=params.get("patch_input_scale"),
                                patch_batch_size=params.get("patch_batch_size"),
-                               allow_patch_grid_as_lulc=bool(params.get("allow_patch_grid_as_lulc", False)))
-        result = {"status": "pending_validation" if report["pending_inputs"] else "completed", "result": report,
-                  "outputs": [report["project_file"]]}
+                               allow_patch_grid_as_lulc=bool(params.get("allow_patch_grid_as_lulc", False)),
+                               invest_models=params.get("invest_models"))
+        # Building a project is not evidence that its local files and model
+        # contracts are runnable.  Always validate the generated document in
+        # the same request so callers receive one authoritative status.
+        validation = validate(Path(report["project_file"]))
+        report["project_validation"] = validation
+        if validation["status"] != "valid":
+            status = "failed"
+            error = "; ".join(validation["errors"])
+        elif report["pending_inputs"]:
+            status, error = "pending_validation", None
+        else:
+            status, error = "completed", None
+        result = {"status": status, "result": report, "outputs": [report["project_file"]], "error": error}
     elif envelope.get("operation") == "project.validate":
         report = validate(Path(envelope["parameters"]["project_file"]).expanduser().resolve())
         result = {"status": "completed" if report["status"] == "valid" else "failed", "result": report,

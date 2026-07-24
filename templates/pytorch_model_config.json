@@ -4,8 +4,6 @@
   "format": "exported_program",
   "weights": "model.pt2",
   "sha256": "replace_with_lowercase_sha256",
-  "sensor": "Sentinel-2_L2A",
-  "spatial_resolution_m": 10,
   "classes": [
     {"id": 1, "name": "subsidence_water"},
     {"id": 2, "name": "natural_water"},
@@ -16,6 +14,9 @@
     {"id": 7, "name": "bare_mining_land"}
   ],
   "input": {
+    "sensor": "Sentinel-2_L2A",
+    "resolution_m": 10,
+    "value_range": [0, 10000],
     "bands": ["blue", "green", "red", "nir", "swir1", "swir2"],
     "band_indexes": [1, 2, 3, 4, 5, 6],
     "mean": [0.1, 0.1, 0.1, 0.2, 0.15, 0.1],
