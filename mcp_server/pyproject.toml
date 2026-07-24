@@ -1,6 +1,6 @@
 [project]
 name = "mining-gis-mcp"
-version = "0.2.0"
+version = "0.2.1"
 description = "Local-first MCP tools for mining-area GIS workflows"
 requires-python = ">=3.11"
 dependencies = ["mcp[cli]>=1.2,<2"]
@@ -20,3 +20,11 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 include = ["mining_mcp_server.py"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"../scripts" = "mining_gis_mcp/runtime/scripts"
+"../interfaces" = "mining_gis_mcp/runtime/interfaces"
+"../templates" = "mining_gis_mcp/runtime/templates"
+"../deep_learning/registered_models" = "mining_gis_mcp/runtime/deep_learning/registered_models"
+"../config/local_paths.example.json" = "mining_gis_mcp/runtime/config/local_paths.example.json"
+"../config/plus_v142_ui_profile.example.json" = "mining_gis_mcp/runtime/config/plus_v142_ui_profile.example.json"

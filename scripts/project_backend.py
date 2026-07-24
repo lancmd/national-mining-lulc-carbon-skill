@@ -45,7 +45,15 @@ def main() -> int:
                                patch_band_indexes=params.get("patch_band_indexes"), patch_input_scale=params.get("patch_input_scale"),
                                patch_batch_size=params.get("patch_batch_size"),
                                allow_patch_grid_as_lulc=bool(params.get("allow_patch_grid_as_lulc", False)),
-                               invest_models=params.get("invest_models"))
+                               invest_models=params.get("invest_models"), accuracy_config=params.get("accuracy_config"),
+                               ecosystem_service_config=params.get("ecosystem_service_config"),
+                               subsidence_water_config=params.get("subsidence_water_config"),
+                               subsidence_water_boundary=params.get("subsidence_water_boundary"),
+                               aquatic_vegetation_boundary=params.get("aquatic_vegetation_boundary"),
+                               bottom_sediment_boundary=params.get("bottom_sediment_boundary"),
+                               elevation_vertical_datum=params.get("elevation_vertical_datum"),
+                               water_level_vertical_datum=params.get("water_level_vertical_datum"),
+                               water_surface_elevation_m=params.get("water_surface_elevation_m"))
         # Building a project is not evidence that its local files and model
         # contracts are runnable.  Always validate the generated document in
         # the same request so callers receive one authoritative status.

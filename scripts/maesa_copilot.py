@@ -124,7 +124,8 @@ def workspace_for(project_file: Path, project: dict[str, Any]) -> Path:
 PATH_LEAF_KEYS = {
     "path", "imagery", "lulc_baseline", "historical_lulc", "mine_boundary", "carbon_density", "model_package",
     "training_roi", "subsidence_w_dat", "subsidence_depth_raster", "dem", "workface_boundary",
-    "aquatic_vegetation_boundary", "subsidence_water_boundary", "datastack_template", "provided_datastack",
+    "aquatic_vegetation_boundary", "bottom_sediment_boundary", "subsidence_water_boundary",
+    "validation_samples", "geodetector_samples", "datastack_template", "provided_datastack",
 }
 
 

@@ -158,7 +158,7 @@ MAESA-Agent/
 
 ## License and scope
 
-MAESA-Agent 0.2.0 is released under the [MIT License](LICENSE). The license covers this repository's source code and documentation only. MAESA orchestrates installed software; it does not redistribute ArcGIS Pro, ENVI, PLUS or InVEST licenses, nor does it fabricate model inputs or scientific conclusions. Use independently validated data, documented coefficients and appropriate software licenses for research results.
+MAESA-Agent 0.2.1 is released under the [MIT License](LICENSE). The license covers this repository's source code and documentation only. MAESA orchestrates installed software; it does not redistribute ArcGIS Pro, ENVI, PLUS or InVEST licenses, nor does it fabricate model inputs or scientific conclusions. Use independently validated data, documented coefficients and appropriate software licenses for research results.
 
 ### Optional real ResNet-50 integration test
 
@@ -174,3 +174,5 @@ $env:MAESA_RESNET50_TEST_RASTER = "D:\data\aligned_30m_rgb.tif"
 The test verifies the registered SHA-256 fingerprint, runs patch-grid inference, and checks the output class range. It does not treat the patch grid as independently validated pixel-wise LULC.
 
 The tiny local InVEST water-yield and habitat-quality integration fixture is likewise opt-in: set `MAESA_RUN_LOCAL_INVEST_INTEGRATION=1` before running `tests/invest_ecosystem_integration_smoke.py`. This prevents a normal contract suite from launching a licensed desktop installation unexpectedly.
+
+For a final workstation acceptance run after PLUS GUI calibration, set `MAESA_RUN_LOCAL_FULL_CHAIN=1` and `MAESA_LOCAL_FULL_CHAIN_PROJECT` to an approved local `project.json`, then run `tests/local_full_chain_regression.py`. It requires the workflow, final analysis validation, provenance, and output manifest to finish as `completed`.

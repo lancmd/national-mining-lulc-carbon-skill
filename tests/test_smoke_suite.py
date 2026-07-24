@@ -13,8 +13,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.mark.parametrize("script", [
-    "project_conditional_inputs_smoke.py", "project_builder_smoke.py", "project_workflow_smoke.py", "plus_re_contract_smoke.py",
-    "native_resnet50_patch_smoke.py", "pytorch_template_contract_smoke.py", "registered_resnet50_real_inference.py",
+    "project_conditional_inputs_smoke.py", "project_builder_smoke.py", "full_chain_builder_contract_smoke.py", "project_workflow_smoke.py", "plus_re_contract_smoke.py",
+    "native_resnet50_patch_smoke.py", "pytorch_template_contract_smoke.py", "registered_resnet50_real_inference.py", "local_full_chain_regression.py",
     "envi_backend_smoke.py",
     "maesa_copilot_smoke.py", "project_backend_validation_smoke.py", "workflow_pending_validation_smoke.py",
     "project_task_modes_smoke.py", "stage_output_mapping_smoke.py",

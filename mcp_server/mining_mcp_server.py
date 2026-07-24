@@ -19,7 +19,22 @@ from urllib.parse import urlparse
 from mcp.server.fastmcp import FastMCP
 
 
-ROOT = Path(__file__).resolve().parents[1]
+def runtime_root() -> Path:
+    """Locate either a checked-out skill or runtime assets bundled in a wheel."""
+    configured = os.getenv("MAESA_SKILL_ROOT")
+    candidates = [Path(configured).expanduser()] if configured else []
+    candidates.extend([
+        Path(__file__).resolve().parent / "mining_gis_mcp" / "runtime",
+        Path(__file__).resolve().parents[1],
+    ])
+    for candidate in candidates:
+        root = candidate.resolve()
+        if (root / "scripts").is_dir() and (root / "interfaces").is_dir():
+            return root
+    raise RuntimeError("MAESA runtime assets are unavailable; reinstall the MAESA-Agent package or set MAESA_SKILL_ROOT")
+
+
+ROOT = runtime_root()
 sys.path.insert(0, str(ROOT / "scripts"))
 from plus_contract import re_contract_errors  # noqa: E402
 from path_safety import PathSafetyError, is_unc, require_within  # noqa: E402
@@ -29,10 +44,12 @@ VALID_PLUS_SCENARIOS = frozenset({"ND", "UD", "EP", "RE"})
 INPUT_PATH_KEYS = {"path", "project_file", "project", "datastack", "model_package", "input_raster", "training_vector",
                    "criteria_table", "config", "samples_file", "reference_raster", "predicted_raster", "baseline_raster",
                    "workflow_raster", "independent_raster", "scores_table", "candidates_table", "sample_table", "samples_table",
+                   "validation_samples", "geodetector_samples",
                    "validation_file", "input", "inputs", "aprx", "symbology_layer", "dem", "subsidence_depth",
                    "water_boundary", "core_driver_input", "carbon_pools_path", "imagery", "historical_lulc", "lulc_baseline",
                    "driver_factors", "mine_boundary", "roi", "training_roi", "subsidence_water_boundary",
-                   "carbon_density", "subsidence_depth_raster", "w_dat", "workface_boundary"}
+                   "aquatic_vegetation_boundary", "bottom_sediment_boundary", "carbon_density", "subsidence_depth_raster",
+                   "w_dat", "workface_boundary"}
 OUTPUT_PATH_KEYS = {"output", "output_job", "workspace", "class_output", "confidence_output", "low_confidence_output",
                     "output_raster", "output_report", "expected_output", "output_directory", "water_depth_output",
                     "volume_table", "carbon_table", "pdf", "png", "aprx_output", "validation_output", "model_workspace", "output_project"}
@@ -256,6 +273,15 @@ def build_local_project_from_inputs(output_project: str, project_id: str, worksp
                                     patch_band_indexes: list[int] | None = None, patch_input_scale: float | None = None,
                                     patch_batch_size: int | None = None, allow_patch_grid_as_lulc: bool = False,
                                     invest_models: dict[str, Any] | None = None,
+                                    accuracy_config: dict[str, Any] | None = None,
+                                    ecosystem_service_config: dict[str, Any] | None = None,
+                                    subsidence_water_config: dict[str, Any] | None = None,
+                                    subsidence_water_boundary: str | None = None,
+                                    aquatic_vegetation_boundary: str | None = None,
+                                    bottom_sediment_boundary: str | None = None,
+                                    elevation_vertical_datum: str | None = None,
+                                    water_level_vertical_datum: str | None = None,
+                                    water_surface_elevation_m: float | None = None,
                                     backend: str = "project") -> str:
     """Build a local multi-date project from supplied paths.
 
@@ -276,6 +302,11 @@ def build_local_project_from_inputs(output_project: str, project_id: str, worksp
         "patch_stride": patch_stride, "patch_band_indexes": patch_band_indexes,
         "patch_input_scale": patch_input_scale, "patch_batch_size": patch_batch_size,
         "allow_patch_grid_as_lulc": allow_patch_grid_as_lulc, "invest_models": invest_models,
+        "accuracy_config": accuracy_config, "ecosystem_service_config": ecosystem_service_config,
+        "subsidence_water_config": subsidence_water_config, "subsidence_water_boundary": subsidence_water_boundary,
+        "aquatic_vegetation_boundary": aquatic_vegetation_boundary, "bottom_sediment_boundary": bottom_sediment_boundary,
+        "elevation_vertical_datum": elevation_vertical_datum, "water_level_vertical_datum": water_level_vertical_datum,
+        "water_surface_elevation_m": water_surface_elevation_m,
     }))
 
 

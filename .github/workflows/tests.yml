@@ -23,6 +23,14 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e ".\mcp_server[validation,dev]"
+      - name: Verify standalone MCP wheel assets
+        shell: pwsh
+        run: |
+          python -m pip wheel .\mcp_server --no-deps --wheel-dir wheelhouse
+          $wheel = Get-ChildItem wheelhouse\*.whl | Select-Object -First 1
+          python -c "import sys, zipfile; z=zipfile.ZipFile(sys.argv[1]); names=set(z.namelist()); required={'mining_mcp_server.py','mining_gis_mcp/runtime/scripts/project_backend.py','mining_gis_mcp/runtime/interfaces/backend_registry.example.json'}; missing=required-names; assert not missing, missing" $wheel.FullName
+          python -m pip install --no-deps --target wheel_target $wheel.FullName
+          python -c "import sys; from pathlib import Path; sys.path.insert(0, sys.argv[1]); import mining_mcp_server; assert (mining_mcp_server.ROOT/'scripts'/'project_backend.py').is_file()" wheel_target
       - run: python -m compileall -q scripts mcp_server tests
       - name: Run contract tests
         shell: pwsh

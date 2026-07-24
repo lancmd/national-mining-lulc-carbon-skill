@@ -4,6 +4,15 @@
 
 `task_type: "invest_only"` 可选传入 `invest_models`。例如同时运行水源供给和生境质量时，分别提供两个经本地 InVEST 验证的 datastack 模板及 `expected_outputs`；未传入该对象时才使用 Carbon 的默认配置。
 
+对 `task_type: "full_chain"`，除影像、驱动因子、矿界和碳密度外，智能体还可以传入：
+
+- `accuracy_config`：独立验证样本与字段名；启用后自动输出混淆矩阵、OA、F1 与 IoU；
+- `ecosystem_service_config` 与 `ecosystem_config`：生态服务权重、敏感性和情景比较设置；
+- `subsidence_water_config`：沉陷积水识别、库容或复合碳库模式；相关边界、垂直基准和水位作为同一 MCP 工具的命名输入；
+- `gis_outputs`：APRX、布局、图层和导出路径。提供该对象时，完整链条会启用最终制图。
+
+若这些科学或布局输入没有提供，项目会返回 `pending_validation`，而不是把缺失的参数伪造成分析结果。
+
 最小数据组合如下：
 
 - 至少两期带年份的多波段遥感影像；
